@@ -1,0 +1,127 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../models/observation.dart';
+import '../models/hotspot.dart';
+
+/// Thin wrapper around the public eBird API 2.0 (https://documenter.getpostman.com/view/664302/S1ENwy59).
+///
+/// All calls require a free personal API key from https://ebird.org/api/keygen.
+class EbirdService {
+  static const _baseUrl = 'https://api.ebird.org/v2';
+
+  final String apiKey;
+
+  EbirdService(this.apiKey);
+
+  Map<String, String> get _headers => {'X-eBirdApiToken': apiKey};
+
+  /// Recent sightings of all species within [distKm] of (lat, lng).
+  /// distKm max is 50 per the eBird API.
+  Future<List<Observation>> nearbyObservations({
+    required double lat,
+    required double lng,
+    int distKm = 25,
+    int back = 7,
+  }) async {
+    final uri = Uri.parse('$_baseUrl/data/obs/geo/recent').replace(
+      queryParameters: {
+        'lat': lat.toStringAsFixed(4),
+        'lng': lng.toStringAsFixed(4),
+        'dist': '$distKm',
+        'back': '$back',
+      },
+    );
+    final res = await http.get(uri, headers: _headers);
+    _checkStatus(res);
+    final list = jsonDecode(res.body) as List;
+    return list
+        .map((e) => Observation.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Recent notable / rare sightings near (lat, lng).
+  Future<List<Observation>> nearbyNotableObservations({
+    required double lat,
+    required double lng,
+    int distKm = 25,
+    int back = 14,
+  }) async {
+    final uri = Uri.parse('$_baseUrl/data/obs/geo/recent/notable').replace(
+      queryParameters: {
+        'lat': lat.toStringAsFixed(4),
+        'lng': lng.toStringAsFixed(4),
+        'dist': '$distKm',
+        'back': '$back',
+      },
+    );
+    final res = await http.get(uri, headers: _headers);
+    _checkStatus(res);
+    final list = jsonDecode(res.body) as List;
+    return list
+        .map((e) => Observation.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Recent sightings of one species (by eBird species code) near (lat, lng).
+  Future<List<Observation>> nearbyObservationsForSpecies({
+    required String speciesCode,
+    required double lat,
+    required double lng,
+    int distKm = 50,
+    int back = 30,
+  }) async {
+    final uri =
+        Uri.parse('$_baseUrl/data/obs/geo/recent/$speciesCode').replace(
+      queryParameters: {
+        'lat': lat.toStringAsFixed(4),
+        'lng': lng.toStringAsFixed(4),
+        'dist': '$distKm',
+        'back': '$back',
+      },
+    );
+    final res = await http.get(uri, headers: _headers);
+    _checkStatus(res);
+    final list = jsonDecode(res.body) as List;
+    return list
+        .map((e) => Observation.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Birding hotspots near (lat, lng).
+  Future<List<Hotspot>> nearbyHotspots({
+    required double lat,
+    required double lng,
+    int distKm = 25,
+  }) async {
+    final uri = Uri.parse('$_baseUrl/ref/hotspot/geo').replace(
+      queryParameters: {
+        'lat': lat.toStringAsFixed(4),
+        'lng': lng.toStringAsFixed(4),
+        'dist': '$distKm',
+        'fmt': 'json',
+      },
+    );
+    final res = await http.get(uri, headers: _headers);
+    _checkStatus(res);
+    final list = jsonDecode(res.body) as List;
+    return list.map((e) => Hotspot.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  void _checkStatus(http.Response res) {
+    if (res.statusCode == 401 || res.statusCode == 403) {
+      throw EbirdApiException(
+          'eBird rejected your API key. Double-check it in Settings.');
+    }
+    if (res.statusCode != 200) {
+      throw EbirdApiException(
+          'eBird API error (${res.statusCode}). Please try again.');
+    }
+  }
+}
+
+class EbirdApiException implements Exception {
+  final String message;
+  EbirdApiException(this.message);
+  @override
+  String toString() => message;
+}
