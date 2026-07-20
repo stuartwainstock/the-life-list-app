@@ -77,6 +77,43 @@ flutter build apk --release
 The installable file lands at `build/app/outputs/flutter-apk/app-release.apk`
 — copy it to your phone (or `flutter install`) to use it without a cable.
 
+## 6. Faster iteration: run it in the browser (localhost)
+
+If you're used to a web dev loop (`npm run dev`-style hot reload), Flutter
+has an equivalent — no phone or emulator needed for quick UI iteration:
+
+```
+flutter config --enable-web
+flutter create --platforms=web .
+flutter run -d chrome
+```
+
+The first line turns on web support (off by default). The second adds the
+missing `web/` scaffolding — it won't touch existing `lib/` code. The third
+builds and serves the app at a local port and opens Chrome, with the usual
+`r` (hot reload) / `R` (full restart) keys in the terminal.
+
+**Known gotcha:** the eBird API is built for server-side/mobile use, and
+may not send the CORS headers a browser requires. If sightings/hotspots
+fail to load in Chrome but work fine on Android, open DevTools (F12) →
+Console and look for a red CORS error — that confirms it.
+
+If you hit that, run the included local proxy alongside the app:
+
+```
+node tools/cors_proxy.js
+```
+
+Then point the app at it instead of eBird directly:
+
+```
+flutter run -d chrome --dart-define=EBIRD_BASE_URL=http://localhost:3000/v2
+```
+
+The proxy just forwards your request to eBird and adds the missing CORS
+header — no data changes, no key changes. Android/iOS builds never need
+this; they call eBird directly with no CORS restriction.
+
 ## What's implemented vs. what's next
 
 Implemented, mirroring GoBird's core loop:

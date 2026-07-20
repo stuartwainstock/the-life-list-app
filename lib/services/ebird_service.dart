@@ -7,7 +7,14 @@ import '../models/hotspot.dart';
 ///
 /// All calls require a free personal API key from https://ebird.org/api/keygen.
 class EbirdService {
-  static const _baseUrl = 'https://api.ebird.org/v2';
+  /// Defaults to eBird directly. Override at build/run time for web
+  /// testing if eBird's API blocks browser CORS requests, e.g.:
+  ///   flutter run -d chrome --dart-define=EBIRD_BASE_URL=http://localhost:3000/v2
+  /// (see tools/cors_proxy.js). Android/iOS builds never need this override.
+  static const _baseUrl = String.fromEnvironment(
+    'EBIRD_BASE_URL',
+    defaultValue: 'https://api.ebird.org/v2',
+  );
 
   final String apiKey;
 
