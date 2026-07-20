@@ -1,0 +1,17 @@
+# App launcher icons — Common Loon brand mark.
+# Source: assets/icon/loon_icon_foreground.png (adaptive foreground)
+# Background: brand cream from docs/brand.md (#FAF6EE)
+# Regenerate: dart run flutter_launcher_icons
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  # Legacy mipmaps / web: flat on cream so icons aren't see-through.
+  image_path: assets/icon/loon_icon_flat.png
+  adaptive_icon_background: "#FAF6EE"
+  adaptive_icon_foreground: assets/icon/loon_icon_foreground.png
+  web:
+    generate: true
+    image_path: assets/icon/loon_icon_flat.png
+    background_color: "#FAF6EE"
+    theme_color: "#3A5A40"

@@ -1,30 +1,33 @@
-# Interim native splash — see docs/tickets/splash-screen-skeleton.md
+# Native splash — The Life List brand mark (Common Loon).
 #
-# PLACEHOLDER branding only. The green + checklist mark are temporary until
-# a real brand/logo ticket lands. Swap `image` / colors here; re-run:
+# Source art: assets/icon/loon_icon_foreground.png (see
+# docs/tickets/wire-real-app-icon.md). Splash uses brand cream (#FAF6EE) in
+# both light and dark system modes — same background either way — so web
+# dark-mode splash doesn't depend on a separate generated dark asset
+# (see docs/tickets/web-splash-dark-mode-bugfix.md). App UI dark theme is
+# unchanged (AppTheme.dark / Settings toggle).
+#
+# Regenerate after changing image/colors:
 #   dart run flutter_native_splash:create
 #
 # Uses Android's system SplashScreen API (via flutter_native_splash), not a
 # hand-rolled Flutter route — aligns with docs/design-principles.md.
 
 flutter_native_splash:
-  # Light: existing ad-hoc seed green (interim)
-  color: "#2E7D32"
-  # Dark: desaturated forest, not pure black (interim — branding pass will revisit)
-  color_dark: "#1B2E1C"
+  color: "#FAF6EE"
+  color_dark: "#FAF6EE"
 
-  # Temporary centered mark — filename is intentional; do not polish this asset.
-  image: assets/splash/splash_icon_placeholder.png
-  image_dark: assets/splash/splash_icon_placeholder.png
+  image: assets/icon/loon_icon_foreground.png
+  image_dark: assets/icon/loon_icon_foreground.png
 
   android_12:
-    color: "#2E7D32"
-    color_dark: "#1B2E1C"
-    image: assets/splash/splash_icon_placeholder.png
-    image_dark: assets/splash/splash_icon_placeholder.png
+    color: "#FAF6EE"
+    color_dark: "#FAF6EE"
+    image: assets/icon/loon_icon_foreground.png
+    image_dark: assets/icon/loon_icon_foreground.png
 
   android: true
-  # iOS not in scope for this skeleton; enable when we add an iOS target.
+  # iOS not scaffolded yet; enable when we add an iOS target.
   ios: false
   # Web gets a matching splash so Chrome cold-start isn't a blank white frame.
   web: true

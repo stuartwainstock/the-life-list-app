@@ -148,8 +148,8 @@ Implemented:
   type scale, with real light/dark support (system-following by default,
   manual override available)
 - Native launch splash (Android `SplashScreen` API via
-  `flutter_native_splash`) — icon and colors are still interim
-  placeholders pending a real app icon/logo
+  `flutter_native_splash`) and adaptive launcher icon — Common Loon
+  brand mark on cream / dark brand backgrounds
 
 ### The life list roadmap
 
@@ -172,17 +172,15 @@ rewrite:
 
 ### Reasonable next steps, roughly in order of effort
 
-1. **Real app icon / logo** — the splash screen currently uses a
-   clearly-flagged placeholder icon; needs actual brand asset work.
-2. **Screen-level hairline-vs-card pass** — `brand.md`'s surface
+1. **Screen-level hairline-vs-card pass** — `brand.md`'s surface
    philosophy calls for replacing the remaining tinted/bordered card
    sections (detail page description block, sightings section) with
    hairline dividers now that tokens exist to build from.
-3. **Species search** — search all 10,000+ eBird species by name, not
+2. **Species search** — search all 10,000+ eBird species by name, not
    just ones seen recently nearby.
-4. **Offline caching** — cache last results so the list isn't empty with
+3. **Offline caching** — cache last results so the list isn't empty with
    no signal.
-5. **Bird call audio** — Xeno-canto has a free public API
+4. **Bird call audio** — Xeno-canto has a free public API
    (https://xeno-canto.org/explore/api) that could slot in next to the
    Wikipedia photo on the species page.
 

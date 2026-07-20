@@ -44,9 +44,12 @@ rather than add one.
   no custom refresh button needed alongside it.
 - **Native launch splash** (`flutter_native_splash` / Android
   `SplashScreen` API) — system splash that dismisses on first Flutter
-  frame, not a hand-rolled Flutter route. Icon/colors are interim
-  placeholders until branding; see `docs/tickets/splash-screen-skeleton.md`
-  and `flutter_native_splash.yaml`.
+  frame, not a hand-rolled Flutter route. Uses the Common Loon brand
+  mark and `docs/brand.md` cream/dark backgrounds; see
+  `flutter_native_splash.yaml`.
+- **App launcher icon** (`flutter_launcher_icons`) — adaptive icon with
+  loon foreground on brand cream (`#FAF6EE`); source art in
+  `assets/icon/`.
 - **Design tokens** (`lib/theme/`) — color, type, spacing, radius from
   `docs/brand.md`, wired through `AppTheme.light` / `AppTheme.dark` with
   `ThemeMode.system`. Prefer `Theme.of(context)` and `AppSpacing` /
