@@ -2,11 +2,16 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../services/wikipedia_service.dart';
 
-/// Lazy-loaded Wikipedia thumbnail for a species. Shared cache means
-/// scrolling the sightings list doesn't re-fetch the same bird twice.
+/// Lazy-loaded Wikipedia thumbnail for a species.
 ///
-/// Pass a [Key] based on the species (or rely on [didUpdateWidget]) so
-/// ListView recycling / filter toggles don't keep the previous bird's image.
+/// Shared [WikipediaService] session cache means scrolling / revisiting
+/// the same bird doesn't re-hit the network.
+///
+/// ## Keys matter
+/// ListView reuses State by slot. When the All ↔ Notable filter swaps
+/// different species into the same index, an unkeyed thumbnail kept showing
+/// the previous bird. Always pass a species-based [Key] from the parent
+/// (and we also refresh in [didUpdateWidget] as belt-and-suspenders).
 class SpeciesThumbnail extends StatefulWidget {
   final String comName;
   final String sciName;
@@ -50,7 +55,8 @@ class _SpeciesThumbnailState extends State<SpeciesThumbnail> {
   @override
   Widget build(BuildContext context) {
     final size = widget.size;
-    final radius = BorderRadius.circular(8);
+    // Match detail-page card radius (species-detail / sightings redesign).
+    final radius = BorderRadius.circular(12);
 
     return SizedBox(
       width: size,

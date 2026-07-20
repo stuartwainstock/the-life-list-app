@@ -47,6 +47,10 @@ app.*.map.json
 # Editor / agent tooling
 .cursor/
 
+# Working tickets — keep locally; not for the public repo.
+# Living references (brand.md, design-principles.md) stay tracked.
+docs/tickets/
+
 # Local env / secrets
 .env
 .env.*

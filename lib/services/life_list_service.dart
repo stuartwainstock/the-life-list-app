@@ -4,10 +4,14 @@ import '../models/life_list_entry.dart';
 
 /// Local-only storage for the user's personal life list.
 ///
-/// This is intentionally simple (a JSON blob in SharedPreferences) for a
-/// v1 feature set. If the list grows large or we add richer querying
-/// (search, filters, stats) later, migrate this to sqflite without
-/// changing the public API of this class — callers just await a Future.
+/// ## Why local-only (for now)
+/// eBird's public API is read-only. Writing checklists needs either their
+/// spreadsheet import (Phase 2 — fields on [LifeListEntry] already align)
+/// or a future partnership for write access. Until then we never upload.
+///
+/// Storage is a JSON blob in SharedPreferences — fine for personal list
+/// sizes. Migrate to sqflite later if we add search/stats; keep this
+/// class's public API stable so callers don't care.
 class LifeListService {
   static const _prefKey = 'life_list_entries';
 

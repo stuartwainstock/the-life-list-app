@@ -1,7 +1,10 @@
 import 'package:geolocator/geolocator.dart';
 
-/// Handles Android location permissions and fetching the device's
-/// current GPS position.
+/// Handles location permission + current GPS position.
+///
+/// Nearby sightings/hotspots are meaningless without a fix. We request
+/// permission on demand and surface user-readable [LocationException]s
+/// rather than raw platform errors.
 class LocationService {
   /// Returns the current position, requesting permission if needed.
   /// Throws a [LocationException] with a user-friendly message on failure.
@@ -17,7 +20,7 @@ class LocationService {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
         throw LocationException(
-            'Location permission denied. GoBirder needs it to find sightings near you.');
+            'Location permission denied. The Life List needs it to find sightings near you.');
       }
     }
 

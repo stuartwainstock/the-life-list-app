@@ -3,9 +3,24 @@ import 'package:http/http.dart' as http;
 import '../models/observation.dart';
 import '../models/hotspot.dart';
 
-/// Thin wrapper around the public eBird API 2.0 (https://documenter.getpostman.com/view/664302/S1ENwy59).
+/// Thin client for eBird API 2.0.
 ///
-/// All calls require a free personal API key from https://ebird.org/api/keygen.
+/// Docs: https://documenter.getpostman.com/view/664302/S1ENwy59
+/// Keygen: https://ebird.org/api/keygen
+///
+/// ## Auth model
+/// Every request sends `X-eBirdApiToken` with the **user's** personal key.
+/// We do not embed a shared key. For App Store scale we'll need a backend
+/// proxy that holds server secrets and rate-limits callers.
+///
+/// ## Web / CORS
+/// eBird often omits CORS headers. Mobile builds call api.ebird.org
+/// directly. Chrome/web testing can override [_baseUrl] via:
+/// `--dart-define=EBIRD_BASE_URL=http://localhost:3000/v2`
+/// paired with `tools/cors_proxy.js`.
+///
+/// Observation endpoints do **not** include family/order — that lives in
+/// the separate taxonomy reference (see [EbirdTaxonomyService]).
 class EbirdService {
   /// Defaults to eBird directly. Override at build/run time for web
   /// testing if eBird's API blocks browser CORS requests, e.g.:

@@ -7,6 +7,22 @@ import '../services/wikipedia_service.dart';
 import '../services/life_list_service.dart';
 import '../utils/relative_time.dart';
 
+/// Species detail — identity, Wikipedia context, nearby sightings feed.
+///
+/// ## Hierarchy (intentional)
+/// Photo → common name (loud) → scientific name (quiet label) → description
+/// card → sightings feed card. Earlier versions flattened all of that into
+/// same-weight text; see `docs/tickets/species-detail-redesign.md`.
+///
+/// ## Hero photo
+/// Collapsing [SliverAppBar] (Play Store / Spotify album pattern). If
+/// Wikipedia has no image we fall back to a normal [AppBar] — never leave
+/// a blank hero slab. Image uses `BoxFit.cover` in the flexible space;
+/// list thumbnails stay separate (contain/crop is a list concern).
+///
+/// ## Life list FAB
+/// Extended FAB can cover the last sighting row; [_fabClearance] pads the
+/// scroll content so the feed can scroll clear of it.
 class SpeciesDetailScreen extends StatefulWidget {
   final String apiKey;
   final String speciesCode;
@@ -220,9 +236,11 @@ class _SpeciesDetailScreenState extends State<SpeciesDetailScreen> {
 
           const SizedBox(height: 28),
 
-          // Sightings section
+          // Sightings feed — most "GoBird-like" part of this screen; gets
+          // its own tinted surface so it doesn't blend into the wiki blurb.
           _SightingsSection(sightings: _sightings),
 
+          // Keep last rows above the extended FAB.
           const SizedBox(height: _fabClearance),
         ],
       ),
@@ -244,7 +262,10 @@ class _HeroAppBar extends StatelessWidget {
       stretch: true,
       expandedHeight: 280,
       backgroundColor: scheme.surface,
-      foregroundColor: scheme.onSurface,
+      // Custom leading — default back icon is ink-colored and disappears on
+      // dark plumage / foliage in the hero (full-bleed photo pattern).
+      automaticallyImplyLeading: false,
+      leading: const _HeroBackButton(),
       flexibleSpace: FlexibleSpaceBar(
         background: Stack(
           fit: StackFit.expand,
@@ -252,6 +273,9 @@ class _HeroAppBar extends StatelessWidget {
             ColoredBox(color: scheme.surfaceContainerHighest),
             CachedNetworkImage(
               imageUrl: imageUrl,
+              // cover is correct for a collapsing hero; the earlier
+              // fixed-height + cover combo cropped awkwardly — flexible
+              // space + scrim is the intended treatment now.
               fit: BoxFit.cover,
               alignment: Alignment.center,
               placeholder: (_, __) => const Center(
@@ -265,22 +289,47 @@ class _HeroAppBar extends StatelessWidget {
                 ),
               ),
             ),
-            // Bottom gradient scrim for contrast on light photos.
+            // Top scrim helps status-bar / leading area; bottom scrim keeps
+            // future overlays readable on light plumage.
             const DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
+                    Color(0x66000000),
                     Colors.transparent,
                     Colors.transparent,
                     Color(0x66000000),
                   ],
-                  stops: [0.0, 0.55, 1.0],
+                  stops: [0.0, 0.22, 0.55, 1.0],
                 ),
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Circular scrim + light icon so back stays visible on any hero photo
+/// (Airbnb / Play Store style — don't rely on photo luminance).
+class _HeroBackButton extends StatelessWidget {
+  const _HeroBackButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(8),
+      child: Material(
+        color: Colors.black.withValues(alpha: 0.45),
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+          onPressed: () => Navigator.of(context).maybePop(),
         ),
       ),
     );

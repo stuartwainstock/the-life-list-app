@@ -1,12 +1,21 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
-/// Fetches a free species photo + short summary from Wikipedia's public
-/// REST API. No key required. Used as a stand-in for eBird's photo
-/// library (Macaulay Library media isn't available via a public API).
+/// Species photo + short blurb from Wikipedia's public REST API.
 ///
-/// Results are memoized in-memory for the app session so list views can
-/// show thumbnails without re-hitting Wikipedia for the same species.
+/// ## Why Wikipedia (not eBird media)
+/// eBird's Macaulay Library is the gold-standard photo source but isn't
+/// exposed on the public eBird API. Wikipedia's page summary endpoint is
+/// free, keyless, and good enough for list thumbs + detail heroes in v1.
+///
+/// ## Lookup strategy
+/// Prefer **scientific name** (precise) then fall back to common name
+/// ("Robin" / "Redbird" style collisions are common otherwise).
+///
+/// ## Caching
+/// In-memory for the app session, including in-flight Future dedupe so a
+/// scrolling list of 40 Canada Geese doesn't fire 40 identical requests.
+/// Not persisted — images are also cached by [CachedNetworkImage] on disk.
 class WikipediaService {
   static final Map<String, Future<WikiSummary?>> _inflight = {};
   static final Map<String, WikiSummary?> _cache = {};
@@ -26,14 +35,13 @@ class WikipediaService {
     return fetchSummary(comName.trim());
   }
 
-  /// Thumbnail URL only — used by list rows. Cached by species identity.
+  /// Thumbnail URL only — used by list rows.
   Future<String?> fetchThumbnailUrl({
     required String comName,
     required String sciName,
   }) async {
     final key = _cacheKey(comName: comName, sciName: sciName);
     final summary = await fetchForSpecies(comName: comName, sciName: sciName);
-    // Also stash under the composite key used by thumbnails.
     _cache.putIfAbsent(key, () => summary);
     return summary?.imageUrl;
   }
@@ -54,7 +62,7 @@ class WikipediaService {
           uri,
           headers: const {
             // Wikipedia asks clients to identify themselves.
-            'Api-User-Agent': 'GoBirder/0.1 (personal birding app; flutter)',
+            'Api-User-Agent': 'TheLifeList/0.1 (personal birding app; flutter)',
           },
         );
         if (res.statusCode != 200) {
@@ -96,9 +104,9 @@ class WikiSummary {
     this.originalImageUrl,
   });
 
-  /// Best URL for list rows.
+  /// Best URL for list rows (small).
   String? get imageUrl => thumbnailUrl ?? originalImageUrl;
 
-  /// Best URL for the detail hero — prefer the full-resolution image.
+  /// Best URL for the detail hero (prefer full-resolution).
   String? get heroImageUrl => originalImageUrl ?? thumbnailUrl;
 }

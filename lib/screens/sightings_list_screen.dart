@@ -1,14 +1,38 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_sticky_header/flutter_sticky_header.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:intl/intl.dart';
 import '../models/observation.dart';
 import '../services/ebird_service.dart';
+import '../services/ebird_taxonomy_service.dart';
 import '../services/location_service.dart';
-import '../widgets/species_thumbnail.dart';
+import '../widgets/sighting_list_row.dart';
 import 'species_detail_screen.dart';
 
-/// Shows a list of recently-reported species near the user's current
-/// location, mirroring GoBird's main "nearby sightings" view.
+/// Nearby sightings — the app's primary screen (GoBird's main loop).
+///
+/// ## UX shape (why it looks like this)
+/// - **SegmentedButton** for All vs Notable — one control, two states
+///   (design-principles: prefer Material 3 over twin ChoiceChips).
+/// - **Rows** emphasize species name; location / relative time / count are
+///   subordinate and icon-anchored (same language as species detail).
+/// - **Family grouping** mirrors how birders and field guides think
+///   (contacts-list sticky headers, not alphabetical A–Z). Sort uses
+///   eBird `taxonOrder`, not name.
+///
+/// ## Sticky headers — important implementation note
+/// Do **not** use multiple `SliverPersistentHeader(pinned: true)` siblings.
+/// Each pins independently and they stack. We use `flutter_sticky_header`'s
+/// [SliverStickyHeader] so the next family header *pushes* the previous
+/// one off (contacts-list behavior). See
+/// `docs/tickets/sticky-header-stacking-bugfix.md`.
+///
+/// ## Taxonomy loading
+/// Observations and taxonomy load in parallel. Until taxonomy resolves,
+/// we render the same restyled **flat** list so first launch / offline
+/// never blocks on a huge taxonomy download. When the lookup arrives,
+/// we regroup in place.
+///
+/// Ticket: `docs/tickets/sightings-list-redesign.md`
 class SightingsListScreen extends StatefulWidget {
   final String apiKey;
   const SightingsListScreen({super.key, required this.apiKey});
@@ -17,9 +41,9 @@ class SightingsListScreen extends StatefulWidget {
   State<SightingsListScreen> createState() => _SightingsListScreenState();
 }
 
-class _SightingsListScreenState extends State<SightingsListScreen>
-    with SingleTickerProviderStateMixin {
+class _SightingsListScreenState extends State<SightingsListScreen> {
   final _locationService = LocationService();
+  final _taxonomy = EbirdTaxonomyService();
   late final EbirdService _ebird = EbirdService(widget.apiKey);
 
   bool _loading = true;
@@ -29,10 +53,14 @@ class _SightingsListScreenState extends State<SightingsListScreen>
   List<Observation> _notable = [];
   bool _showNotableOnly = false;
 
+  /// Null while taxonomy is loading/unavailable — triggers flat-list fallback.
+  Map<String, TaxonomyEntry>? _taxonomyLookup;
+
   @override
   void initState() {
     super.initState();
     _load();
+    _loadTaxonomy();
   }
 
   Future<void> _load() async {
@@ -46,18 +74,55 @@ class _SightingsListScreenState extends State<SightingsListScreen>
         _ebird.nearbyObservations(lat: pos.latitude, lng: pos.longitude),
         _ebird.nearbyNotableObservations(lat: pos.latitude, lng: pos.longitude),
       ]);
+      if (!mounted) return;
       setState(() {
         _position = pos;
         _all = results[0];
-        _notable = results[1];
+        // Notable endpoint returns every report; collapse to one row per
+        // species (most recent) so the list stays scannable like "All".
+        _notable = _mostRecentPerSpecies(results[1]);
         _loading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.toString();
         _loading = false;
       });
     }
+  }
+
+  /// Keeps the newest observation for each speciesCode.
+  List<Observation> _mostRecentPerSpecies(List<Observation> list) {
+    final best = <String, Observation>{};
+    for (final obs in list) {
+      final prev = best[obs.speciesCode];
+      if (prev == null || obs.obsDt.isAfter(prev.obsDt)) {
+        best[obs.speciesCode] = obs;
+      }
+    }
+    return best.values.toList();
+  }
+
+  Future<void> _loadTaxonomy() async {
+    // Fire-and-forget relative to sightings: never gate the UI on this.
+    final lookup = await _taxonomy.getLookup(widget.apiKey);
+    if (!mounted || lookup == null || lookup.isEmpty) return;
+    setState(() => _taxonomyLookup = lookup);
+  }
+
+  void _openDetail(Observation obs) {
+    if (_position == null) return;
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => SpeciesDetailScreen(
+        apiKey: widget.apiKey,
+        speciesCode: obs.speciesCode,
+        comName: obs.comName,
+        sciName: obs.sciName,
+        lat: _position!.latitude,
+        lng: _position!.longitude,
+      ),
+    ));
   }
 
   @override
@@ -77,23 +142,28 @@ class _SightingsListScreenState extends State<SightingsListScreen>
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                const Text('Show:'),
-                const SizedBox(width: 12),
-                ChoiceChip(
-                  label: const Text('All species'),
-                  selected: !_showNotableOnly,
-                  onSelected: (_) => setState(() => _showNotableOnly = false),
-                ),
-                const SizedBox(width: 8),
-                ChoiceChip(
-                  label: const Text('Notable / rare'),
-                  selected: _showNotableOnly,
-                  onSelected: (_) => setState(() => _showNotableOnly = true),
-                ),
-              ],
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: SizedBox(
+              width: double.infinity,
+              // Material 3 segmented control — replaces two independent chips
+              // so the filter reads as one mutually exclusive choice.
+              child: SegmentedButton<bool>(
+                segments: const [
+                  ButtonSegment<bool>(
+                    value: false,
+                    label: Text('All species'),
+                  ),
+                  ButtonSegment<bool>(
+                    value: true,
+                    label: Text('Notable / rare'),
+                  ),
+                ],
+                selected: {_showNotableOnly},
+                onSelectionChanged: (selected) {
+                  setState(() => _showNotableOnly = selected.first);
+                },
+                showSelectedIcon: false,
+              ),
             ),
           ),
           Expanded(child: _buildBody(list)),
@@ -126,42 +196,187 @@ class _SightingsListScreenState extends State<SightingsListScreen>
     if (list.isEmpty) {
       return const Center(child: Text('No sightings reported nearby recently.'));
     }
+
+    final lookup = _taxonomyLookup;
+    // Fallback: taxonomy not ready yet (or fetch failed with no cache).
+    // Same row widget as the grouped path — only structure differs.
+    if (lookup == null) {
+      return RefreshIndicator(
+        onRefresh: _load,
+        child: ListView.separated(
+          itemCount: list.length,
+          separatorBuilder: (_, __) => const Divider(height: 1),
+          itemBuilder: (context, i) {
+            final obs = list[i];
+            return SightingListRow(
+              // Keys include species so filter toggles don't reuse the wrong
+              // thumbnail State (ListView recycling bug we hit early on).
+              key: ValueKey('${obs.speciesCode}-${obs.locId}-${obs.obsDt}'),
+              observation: obs,
+              onTap: () => _openDetail(obs),
+            );
+          },
+        ),
+      );
+    }
+
+    final groups = _groupByFamily(list, lookup);
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView.separated(
-        itemCount: list.length,
-        separatorBuilder: (_, __) => const Divider(height: 1),
-        itemBuilder: (context, i) {
-          final obs = list[i];
-          return ListTile(
-            key: ValueKey('${obs.speciesCode}-${obs.locId}-${obs.obsDt}'),
-            leading: SpeciesThumbnail(
-              key: ValueKey('thumb-${obs.speciesCode}'),
-              comName: obs.comName,
-              sciName: obs.sciName,
-            ),
-            title: Text(obs.comName),
-            subtitle: Text(
-              '${obs.locName}\n${DateFormat.yMMMd().add_jm().format(obs.obsDt)}'
-              '${obs.howMany != null ? ' · ${obs.howMany} seen' : ''}',
-            ),
-            isThreeLine: true,
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              if (_position == null) return;
-              Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => SpeciesDetailScreen(
-                  apiKey: widget.apiKey,
-                  speciesCode: obs.speciesCode,
-                  comName: obs.comName,
-                  sciName: obs.sciName,
-                  lat: _position!.latitude,
-                  lng: _position!.longitude,
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          // One SliverStickyHeader per family: header is pushed away by the
+          // next section (not independently pinned — that stacks headers).
+          for (final group in groups)
+            SliverStickyHeader(
+              header: _FamilyHeader(
+                familyName: group.familyName,
+                count: group.items.length,
+              ),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, i) {
+                    final obs = group.items[i];
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SightingListRow(
+                          key: ValueKey(
+                            '${obs.speciesCode}-${obs.locId}-${obs.obsDt}',
+                          ),
+                          observation: obs,
+                          onTap: () => _openDetail(obs),
+                        ),
+                        if (i < group.items.length - 1)
+                          const Divider(height: 1),
+                      ],
+                    );
+                  },
+                  childCount: group.items.length,
                 ),
-              ));
-            },
-          );
-        },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Bucket by familyComName; order families and members by taxonOrder.
+  /// Unmatched speciesCodes land in "Other" (stale cache / new taxa).
+  List<_FamilyGroup> _groupByFamily(
+    List<Observation> list,
+    Map<String, TaxonomyEntry> lookup,
+  ) {
+    final buckets = <String, List<Observation>>{};
+    final familyOrder = <String, int>{};
+
+    for (final obs in list) {
+      final entry = lookup[obs.speciesCode];
+      final family = entry?.familyComName ?? 'Other';
+      buckets.putIfAbsent(family, () => []).add(obs);
+      final order = entry?.taxonOrder ?? 999999;
+      final prev = familyOrder[family];
+      if (prev == null || order < prev) {
+        familyOrder[family] = order;
+      }
+    }
+
+    // Sort species within each family by taxonOrder, then name.
+    for (final items in buckets.values) {
+      items.sort((a, b) {
+        final oa = lookup[a.speciesCode]?.taxonOrder ?? 999999;
+        final ob = lookup[b.speciesCode]?.taxonOrder ?? 999999;
+        final byOrder = oa.compareTo(ob);
+        if (byOrder != 0) return byOrder;
+        return a.comName.compareTo(b.comName);
+      });
+    }
+
+    final families = buckets.keys.toList()
+      ..sort((a, b) {
+        // Keep "Other" last.
+        if (a == 'Other' && b != 'Other') return 1;
+        if (b == 'Other' && a != 'Other') return -1;
+        final oa = familyOrder[a] ?? 999999;
+        final ob = familyOrder[b] ?? 999999;
+        final byOrder = oa.compareTo(ob);
+        if (byOrder != 0) return byOrder;
+        return a.compareTo(b);
+      });
+
+    return [
+      for (final family in families)
+        _FamilyGroup(familyName: family, items: buckets[family]!),
+    ];
+  }
+}
+
+class _FamilyGroup {
+  final String familyName;
+  final List<Observation> items;
+
+  _FamilyGroup({required this.familyName, required this.items});
+}
+
+/// Sticky family section header.
+///
+/// Visual language matches species-detail section eyebrows: brand green
+/// label + count pill. Behavior comes from [SliverStickyHeader] parent —
+/// this widget itself is just a fixed-height bar.
+class _FamilyHeader extends StatelessWidget {
+  final String familyName;
+  final int count;
+
+  const _FamilyHeader({
+    required this.familyName,
+    required this.count,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final accent = scheme.primary;
+
+    return Material(
+      color: scheme.surfaceContainerHighest,
+      child: SizedBox(
+        height: 40,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  familyName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: accent,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '$count',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: accent,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -1,9 +1,13 @@
 import 'package:intl/intl.dart';
 
-/// Human-friendly relative time for sightings feed rows.
+/// Human-friendly relative time for scannable list rows.
+///
+/// Field use favors "2 hours ago" over absolute clocks (design-principles).
+/// Shared by the nearby sightings list and the species-detail feed — keep
+/// formatting here so we don't drift between screens.
 ///
 /// Examples: "Just now", "12 minutes ago", "2 hours ago", "Yesterday",
-/// "3 days ago", then a short date like "Jul 12" past ~7 days.
+/// "3 days ago"; past ~7 days falls back to a short date ("Jul 12").
 String formatRelativeTime(DateTime when, {DateTime? now}) {
   final current = now ?? DateTime.now();
   final diff = current.difference(when);

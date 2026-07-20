@@ -1,5 +1,8 @@
-/// A single bird observation as returned by the eBird API
-/// (https://api.ebird.org/v2/data/obs/geo/recent).
+/// A single bird observation as returned by eBird
+/// (`/v2/data/obs/geo/recent` and related endpoints).
+///
+/// Note: family / taxonomic order are **not** on this payload — join those
+/// via [TaxonomyEntry] / [EbirdTaxonomyService] when grouping the list.
 class Observation {
   final String speciesCode;
   final String comName;

@@ -1,0 +1,30 @@
+# Interim native splash — see docs/tickets/splash-screen-skeleton.md
+#
+# PLACEHOLDER branding only. The green + checklist mark are temporary until
+# a real brand/logo ticket lands. Swap `image` / colors here; re-run:
+#   dart run flutter_native_splash:create
+#
+# Uses Android's system SplashScreen API (via flutter_native_splash), not a
+# hand-rolled Flutter route — aligns with docs/design-principles.md.
+
+flutter_native_splash:
+  # Light: existing ad-hoc seed green (interim)
+  color: "#2E7D32"
+  # Dark: desaturated forest, not pure black (interim — branding pass will revisit)
+  color_dark: "#1B2E1C"
+
+  # Temporary centered mark — filename is intentional; do not polish this asset.
+  image: assets/splash/splash_icon_placeholder.png
+  image_dark: assets/splash/splash_icon_placeholder.png
+
+  android_12:
+    color: "#2E7D32"
+    color_dark: "#1B2E1C"
+    image: assets/splash/splash_icon_placeholder.png
+    image_dark: assets/splash/splash_icon_placeholder.png
+
+  android: true
+  # iOS not in scope for this skeleton; enable when we add an iOS target.
+  ios: false
+  # Web gets a matching splash so Chrome cold-start isn't a blank white frame.
+  web: true
