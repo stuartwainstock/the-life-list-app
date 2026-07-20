@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:intl/intl.dart';
 import '../models/observation.dart';
 import '../models/life_list_entry.dart';
 import '../services/ebird_service.dart';
 import '../services/wikipedia_service.dart';
 import '../services/life_list_service.dart';
+import '../utils/relative_time.dart';
 
 class SpeciesDetailScreen extends StatefulWidget {
   final String apiKey;
@@ -38,6 +38,14 @@ class _SpeciesDetailScreenState extends State<SpeciesDetailScreen> {
   List<Observation> _sightings = [];
   WikiSummary? _summary;
   bool _isLogged = false;
+
+  /// FAB.extended height (~56) + margin (~16) + a little breathing room.
+  static const double _fabClearance = 88;
+
+  bool get _hasPhoto {
+    final url = _summary?.heroImageUrl;
+    return url != null && url.isNotEmpty;
+  }
 
   @override
   void initState() {
@@ -93,7 +101,8 @@ class _SpeciesDetailScreenState extends State<SpeciesDetailScreen> {
             const SizedBox(height: 12),
             TextField(
               controller: locController,
-              decoration: const InputDecoration(labelText: 'Location (optional)'),
+              decoration:
+                  const InputDecoration(labelText: 'Location (optional)'),
             ),
           ],
         ),
@@ -135,69 +144,17 @@ class _SpeciesDetailScreenState extends State<SpeciesDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.comName)),
+      // No photo (or still loading): standard app bar. Photo hero owns
+      // the back button via SliverAppBar once content is ready.
+      appBar: (_loading || !_hasPhoto)
+          ? AppBar(title: Text(widget.comName))
+          : null,
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              children: [
-                if (_summary?.heroImageUrl != null)
-                  ColoredBox(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 360),
-                      child: CachedNetworkImage(
-                        imageUrl: _summary!.heroImageUrl!,
-                        width: double.infinity,
-                        fit: BoxFit.contain,
-                        alignment: Alignment.center,
-                        placeholder: (_, __) => const SizedBox(
-                          height: 200,
-                          child: Center(child: CircularProgressIndicator()),
-                        ),
-                        errorWidget: (_, __, ___) => const SizedBox(
-                          height: 120,
-                          child: Center(child: Icon(Icons.image_not_supported_outlined)),
-                        ),
-                      ),
-                    ),
-                  ),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.sciName,
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleMedium
-                            ?.copyWith(fontStyle: FontStyle.italic),
-                      ),
-                      const SizedBox(height: 12),
-                      if (_summary != null && _summary!.extract.isNotEmpty)
-                        Text(_summary!.extract),
-                      const SizedBox(height: 20),
-                      Text('Recent sightings near you',
-                          style: Theme.of(context).textTheme.titleMedium),
-                    ],
-                  ),
-                ),
-                if (_sightings.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16),
-                    child: Text('No recent nearby sightings of this species.'),
-                  )
-                else
-                  ..._sightings.map(
-                    (s) => ListTile(
-                      title: Text(s.locName),
-                      subtitle: Text(
-                        '${DateFormat.yMMMd().add_jm().format(s.obsDt)}'
-                        '${s.howMany != null ? ' · ${s.howMany} seen' : ''}',
-                      ),
-                    ),
-                  ),
-                const SizedBox(height: 24),
+          : CustomScrollView(
+              slivers: [
+                if (_hasPhoto) _HeroAppBar(imageUrl: _summary!.heroImageUrl!),
+                SliverToBoxAdapter(child: _buildBody(context)),
               ],
             ),
       floatingActionButton: _loading
@@ -207,6 +164,259 @@ class _SpeciesDetailScreenState extends State<SpeciesDetailScreen> {
               icon: Icon(_isLogged ? Icons.check : Icons.add),
               label: Text(_isLogged ? 'On your life list' : 'Add to life list'),
             ),
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Identity block
+          Text(
+            widget.comName,
+            style: theme.textTheme.headlineMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+              height: 1.15,
+            ),
+          ),
+          if (widget.sciName.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              widget.sciName,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+                fontStyle: FontStyle.italic,
+                letterSpacing: 0.8,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+
+          // Description block — distinct surface
+          if (_summary != null && _summary!.extract.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  _summary!.extract,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    height: 1.45,
+                    color: scheme.onSurface,
+                  ),
+                ),
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 28),
+
+          // Sightings section
+          _SightingsSection(sightings: _sightings),
+
+          const SizedBox(height: _fabClearance),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroAppBar extends StatelessWidget {
+  final String imageUrl;
+
+  const _HeroAppBar({required this.imageUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return SliverAppBar(
+      pinned: true,
+      stretch: true,
+      expandedHeight: 280,
+      backgroundColor: scheme.surface,
+      foregroundColor: scheme.onSurface,
+      flexibleSpace: FlexibleSpaceBar(
+        background: Stack(
+          fit: StackFit.expand,
+          children: [
+            ColoredBox(color: scheme.surfaceContainerHighest),
+            CachedNetworkImage(
+              imageUrl: imageUrl,
+              fit: BoxFit.cover,
+              alignment: Alignment.center,
+              placeholder: (_, __) => const Center(
+                child: CircularProgressIndicator(),
+              ),
+              errorWidget: (_, __, ___) => Center(
+                child: Icon(
+                  Icons.image_not_supported_outlined,
+                  size: 48,
+                  color: scheme.outline,
+                ),
+              ),
+            ),
+            // Bottom gradient scrim for contrast on light photos.
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.transparent,
+                    Color(0x66000000),
+                  ],
+                  stops: [0.0, 0.55, 1.0],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SightingsSection extends StatelessWidget {
+  final List<Observation> sightings;
+
+  const _SightingsSection({required this.sightings});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final accent = scheme.primary;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  'Recent sightings near you',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: accent,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '${sightings.length}',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: accent,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (sightings.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Text(
+                  'No recent nearby sightings of this species.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              )
+            else
+              ...sightings.map(
+                (s) => _SightingRow(observation: s),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SightingRow extends StatelessWidget {
+  final Observation observation;
+
+  const _SightingRow({required this.observation});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final relative = formatRelativeTime(observation.obsDt);
+    final count = observation.howMany;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.location_on_outlined,
+            size: 20,
+            color: scheme.primary,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  observation.locName,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    height: 1.25,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: relative,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                      if (count != null)
+                        TextSpan(
+                          text: ' · $count seen',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.outline,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
