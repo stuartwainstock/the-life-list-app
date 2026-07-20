@@ -53,7 +53,10 @@ class _SpeciesDetailScreenState extends State<SpeciesDetailScreen> {
         lat: widget.lat,
         lng: widget.lng,
       ),
-      _wiki.fetchSummary(widget.comName),
+      _wiki.fetchForSpecies(
+        comName: widget.comName,
+        sciName: widget.sciName,
+      ),
     ]);
     if (!mounted) return;
     setState(() {
@@ -137,12 +140,26 @@ class _SpeciesDetailScreenState extends State<SpeciesDetailScreen> {
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               children: [
-                if (_summary?.imageUrl != null)
-                  CachedNetworkImage(
-                    imageUrl: _summary!.imageUrl!,
-                    height: 240,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
+                if (_summary?.heroImageUrl != null)
+                  ColoredBox(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 360),
+                      child: CachedNetworkImage(
+                        imageUrl: _summary!.heroImageUrl!,
+                        width: double.infinity,
+                        fit: BoxFit.contain,
+                        alignment: Alignment.center,
+                        placeholder: (_, __) => const SizedBox(
+                          height: 200,
+                          child: Center(child: CircularProgressIndicator()),
+                        ),
+                        errorWidget: (_, __, ___) => const SizedBox(
+                          height: 120,
+                          child: Center(child: Icon(Icons.image_not_supported_outlined)),
+                        ),
+                      ),
+                    ),
                   ),
                 Padding(
                   padding: const EdgeInsets.all(16),

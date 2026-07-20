@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/life_list_entry.dart';
 import '../services/life_list_service.dart';
+import '../widgets/species_thumbnail.dart';
 
 /// The user's personal life list — every species they've marked as seen,
 /// stored locally on-device (see LifeListService for why, and for the
@@ -94,6 +95,12 @@ class _LifeListScreenState extends State<LifeListScreen> {
                     itemBuilder: (context, i) {
                       final e = _entries[i];
                       return ListTile(
+                        key: ValueKey(e.speciesCode),
+                        leading: SpeciesThumbnail(
+                          key: ValueKey('thumb-${e.speciesCode}'),
+                          comName: e.comName,
+                          sciName: e.sciName,
+                        ),
                         title: Text(e.comName),
                         subtitle: Text(
                           '${e.locName}\n${DateFormat.yMMMd().format(e.dateSeen)}'

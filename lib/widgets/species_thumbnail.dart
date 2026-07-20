@@ -1,0 +1,119 @@
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
+import '../services/wikipedia_service.dart';
+
+/// Lazy-loaded Wikipedia thumbnail for a species. Shared cache means
+/// scrolling the sightings list doesn't re-fetch the same bird twice.
+///
+/// Pass a [Key] based on the species (or rely on [didUpdateWidget]) so
+/// ListView recycling / filter toggles don't keep the previous bird's image.
+class SpeciesThumbnail extends StatefulWidget {
+  final String comName;
+  final String sciName;
+  final double size;
+
+  const SpeciesThumbnail({
+    super.key,
+    required this.comName,
+    required this.sciName,
+    this.size = 56,
+  });
+
+  @override
+  State<SpeciesThumbnail> createState() => _SpeciesThumbnailState();
+}
+
+class _SpeciesThumbnailState extends State<SpeciesThumbnail> {
+  static final _wiki = WikipediaService();
+  late Future<String?> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant SpeciesThumbnail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.comName != widget.comName ||
+        oldWidget.sciName != widget.sciName) {
+      _future = _load();
+    }
+  }
+
+  Future<String?> _load() => _wiki.fetchThumbnailUrl(
+        comName: widget.comName,
+        sciName: widget.sciName,
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final size = widget.size;
+    final radius = BorderRadius.circular(8);
+
+    return SizedBox(
+      width: size,
+      height: size,
+      child: FutureBuilder<String?>(
+        // Identity in the key forces FutureBuilder to reset when species changes.
+        key: ValueKey('${widget.sciName}|${widget.comName}'),
+        future: _future,
+        builder: (context, snapshot) {
+          final url = snapshot.data;
+          if (snapshot.connectionState != ConnectionState.done) {
+            return _Placeholder(size: size, radius: radius, loading: true);
+          }
+          if (url == null || url.isEmpty) {
+            return _Placeholder(size: size, radius: radius, loading: false);
+          }
+          return ClipRRect(
+            borderRadius: radius,
+            child: CachedNetworkImage(
+              imageUrl: url,
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              placeholder: (_, __) =>
+                  _Placeholder(size: size, radius: radius, loading: true),
+              errorWidget: (_, __, ___) =>
+                  _Placeholder(size: size, radius: radius, loading: false),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _Placeholder extends StatelessWidget {
+  final double size;
+  final BorderRadius radius;
+  final bool loading;
+
+  const _Placeholder({
+    required this.size,
+    required this.radius,
+    required this.loading,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.surfaceContainerHighest;
+    return ClipRRect(
+      borderRadius: radius,
+      child: ColoredBox(
+        color: color,
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: Icon(
+            loading ? Icons.image_outlined : Icons.image_not_supported_outlined,
+            size: size * 0.4,
+            color: Theme.of(context).colorScheme.outline,
+          ),
+        ),
+      ),
+    );
+  }
+}

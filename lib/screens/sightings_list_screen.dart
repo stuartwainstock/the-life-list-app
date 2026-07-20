@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../models/observation.dart';
 import '../services/ebird_service.dart';
 import '../services/location_service.dart';
+import '../widgets/species_thumbnail.dart';
 import 'species_detail_screen.dart';
 
 /// Shows a list of recently-reported species near the user's current
@@ -133,6 +134,12 @@ class _SightingsListScreenState extends State<SightingsListScreen>
         itemBuilder: (context, i) {
           final obs = list[i];
           return ListTile(
+            key: ValueKey('${obs.speciesCode}-${obs.locId}-${obs.obsDt}'),
+            leading: SpeciesThumbnail(
+              key: ValueKey('thumb-${obs.speciesCode}'),
+              comName: obs.comName,
+              sciName: obs.sciName,
+            ),
             title: Text(obs.comName),
             subtitle: Text(
               '${obs.locName}\n${DateFormat.yMMMd().add_jm().format(obs.obsDt)}'
