@@ -2,12 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../models/hotspot.dart';
+import '../services/ebird_list_cache.dart';
 import '../services/ebird_service.dart';
 import '../services/location_service.dart';
+import '../theme/app_spacing.dart';
+import '../utils/relative_time.dart';
 import '../widgets/skeleton.dart';
 
 /// Map of nearby eBird hotspots, using OpenStreetMap tiles via flutter_map
 /// so no Google Maps API key / billing setup is required.
+///
+/// Hotspots use the same stale-while-revalidate disk cache as sightings
+/// (`docs/tickets/offline-caching.md`). Default search radius matches
+/// [EbirdService.nearbyHotspots] (25 km) — sightings radius toggle is
+/// intentionally separate.
 class HotspotsMapScreen extends StatefulWidget {
   final String apiKey;
   const HotspotsMapScreen({super.key, required this.apiKey});
@@ -18,10 +26,16 @@ class HotspotsMapScreen extends StatefulWidget {
 
 class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
   final _locationService = LocationService();
+  final _listCache = EbirdListCache();
   late final EbirdService _ebird = EbirdService(widget.apiKey);
+
+  /// Matches [EbirdService.nearbyHotspots] default.
+  static const _distKm = 25;
 
   bool _loading = true;
   String? _error;
+  bool _showingStale = false;
+  DateTime? _cacheFetchedAt;
   List<Hotspot> _hotspots = [];
   LatLng? _center;
 
@@ -33,32 +47,92 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
 
   Future<void> _load() async {
     setState(() {
-      _loading = true;
+      if (_hotspots.isEmpty) _loading = true;
       _error = null;
+      _showingStale = false;
     });
+
+    // Paint last hotspots immediately (map center from cached lat/lng).
+    final last = await _listCache.readLastHotspots();
+    if (!mounted) return;
+    if (last != null) {
+      setState(() {
+        _center = LatLng(last.lat, last.lng);
+        _hotspots = last.items;
+        _cacheFetchedAt = last.fetchedAt;
+        _loading = false;
+      });
+    }
+
     try {
       final pos = await _locationService.getCurrentPosition();
       if (!mounted) return;
-      // Show the map + user pin as soon as we have a fix; hotspots load
-      // under a lightweight overlay (loading-states-polish).
       setState(() {
         _center = LatLng(pos.latitude, pos.longitude);
       });
+
+      final keyed = await _listCache.readHotspots(
+        lat: pos.latitude,
+        lng: pos.longitude,
+        distKm: _distKm,
+      );
+      if (!mounted) return;
+      if (keyed != null) {
+        setState(() {
+          _hotspots = keyed.items;
+          _cacheFetchedAt = keyed.fetchedAt;
+          _loading = false;
+        });
+      }
+
       final hotspots = await _ebird.nearbyHotspots(
         lat: pos.latitude,
         lng: pos.longitude,
+        distKm: _distKm,
       );
       if (!mounted) return;
+
+      final fetchedAt = DateTime.now().toUtc();
+      final bundle = CachedHotspots(
+        fetchedAt: fetchedAt,
+        lat: pos.latitude,
+        lng: pos.longitude,
+        distKm: _distKm,
+        items: hotspots,
+      );
+      await Future.wait([
+        _listCache.writeHotspots(
+          lat: pos.latitude,
+          lng: pos.longitude,
+          distKm: _distKm,
+          items: hotspots,
+          fetchedAt: fetchedAt,
+        ),
+        _listCache.writeLastHotspots(bundle),
+      ]);
+      if (!mounted) return;
+
       setState(() {
         _hotspots = hotspots;
+        _cacheFetchedAt = fetchedAt;
         _loading = false;
+        _showingStale = false;
+        _error = null;
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _error = e.toString();
-        _loading = false;
-      });
+      if (_hotspots.isNotEmpty) {
+        setState(() {
+          _showingStale = true;
+          _loading = false;
+          _error = null;
+        });
+      } else {
+        setState(() {
+          _error = e.toString();
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -79,7 +153,7 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
   }
 
   Widget _buildBody() {
-    // Location failed before we could place the map.
+    // Location failed before we could place the map, and no cache center.
     if (_error != null && _center == null) {
       return Center(
         child: Padding(
@@ -140,6 +214,26 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
           const Positioned.fill(
             child: IgnorePointer(
               child: Center(child: BrandProgressIndicator()),
+            ),
+          ),
+        if (_showingStale && _cacheFetchedAt != null)
+          Positioned(
+            left: AppSpacing.lg,
+            right: AppSpacing.lg,
+            top: AppSpacing.lg,
+            child: Material(
+              elevation: 1,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Text(
+                  'Showing results from ${formatRelativeTime(_cacheFetchedAt!)} — couldn’t refresh',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
             ),
           ),
         if (_error != null && !_loading)

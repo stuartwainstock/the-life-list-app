@@ -45,4 +45,18 @@ class Observation {
       locationPrivate: json['locationPrivate'] ?? false,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'speciesCode': speciesCode,
+        'comName': comName,
+        'sciName': sciName,
+        'locId': locId,
+        'locName': locName,
+        'obsDt': obsDt.toIso8601String(),
+        'howMany': howMany,
+        'lat': lat,
+        'lng': lng,
+        'obsValid': obsValid,
+        'locationPrivate': locationPrivate,
+      };
 }

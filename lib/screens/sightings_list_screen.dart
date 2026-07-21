@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_sticky_header/flutter_sticky_header.dart';
 import 'package:geolocator/geolocator.dart';
 import '../models/observation.dart';
+import '../services/ebird_list_cache.dart';
 import '../services/ebird_service.dart';
 import '../services/ebird_taxonomy_service.dart';
 import '../services/location_service.dart';
 import '../services/settings_service.dart';
 import '../theme/app_spacing.dart';
+import '../utils/relative_time.dart';
 import '../widgets/sighting_list_row.dart';
 import '../widgets/skeleton_sighting_row.dart';
 import 'species_detail_screen.dart';
@@ -40,6 +42,12 @@ import 'species_detail_screen.dart';
 /// persist + refetch run on release (`Slider.onChangeEnd`) so we don't
 /// hammer eBird mid-drag. Default 7 km via [SettingsService].
 ///
+/// ## Offline / stale-while-revalidate
+/// [EbirdListCache] paints the last matching disk payload immediately, then
+/// refreshes in the background. Fetch failure with cache keeps the list and
+/// shows a muted "couldn't refresh" line — see
+/// `docs/tickets/offline-caching.md`.
+///
 /// Ticket: `docs/tickets/sightings-list-redesign.md`,
 /// `docs/tickets/sightings-radius-toggle.md`
 class SightingsListScreen extends StatefulWidget {
@@ -54,11 +62,17 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
   final _locationService = LocationService();
   final _taxonomy = EbirdTaxonomyService();
   final _settings = SettingsService();
+  final _listCache = EbirdListCache();
   late final EbirdService _ebird = EbirdService(widget.apiKey);
 
   bool _loading = true;
   String? _error;
+  /// True when we're showing disk cache because the network refresh failed.
+  bool _showingStale = false;
+  DateTime? _cacheFetchedAt;
   Position? _position;
+  double? _lat;
+  double? _lng;
   List<Observation> _all = [];
   List<Observation> _notable = [];
   bool _showNotableOnly = false;
@@ -66,6 +80,8 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
 
   /// Null while taxonomy is loading/unavailable — triggers flat-list fallback.
   Map<String, TaxonomyEntry>? _taxonomyLookup;
+
+  bool get _hasListContent => _all.isNotEmpty || _notable.isNotEmpty;
 
   @override
   void initState() {
@@ -80,16 +96,97 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
     await Future.wait([_load(), _loadTaxonomy()]);
   }
 
+  void _applySightingsCache({
+    required List<Observation> all,
+    required List<Observation> notable,
+    required double lat,
+    required double lng,
+    required DateTime fetchedAt,
+    Position? position,
+  }) {
+    _all = all;
+    _notable = _mostRecentPerSpecies(notable);
+    _lat = lat;
+    _lng = lng;
+    if (position != null) _position = position;
+    _cacheFetchedAt = fetchedAt;
+    _loading = false;
+    _error = null;
+  }
+
   Future<void> _load({bool keepContent = false}) async {
-    // Skeleton for initial load / radius change; pull-to-refresh and the
-    // AppBar refresh icon keep existing rows and use RefreshIndicator /
-    // disabled-button feedback instead (loading-states-polish).
+    // Skeleton for initial load / radius change when nothing to show yet;
+    // pull-to-refresh keeps rows (loading-states-polish).
     setState(() {
-      if (!keepContent) _loading = true;
+      if (!keepContent && !_hasListContent) _loading = true;
       _error = null;
+      _showingStale = false;
     });
+
+    // Instant paint from last success when radius still matches (before GPS).
+    // If radius changed, drop the previous radius's rows so we never flash
+    // the wrong cache key (offline-caching acceptance).
+    if (!keepContent) {
+      final last = await _listCache.readLastSightings();
+      if (!mounted) return;
+      if (last != null && last.distKm == _distKm) {
+        setState(() {
+          _applySightingsCache(
+            all: last.all,
+            notable: last.notable,
+            lat: last.lat,
+            lng: last.lng,
+            fetchedAt: last.fetchedAt,
+          );
+        });
+      } else if (_hasListContent) {
+        setState(() {
+          _all = [];
+          _notable = [];
+          _loading = true;
+          _showingStale = false;
+          _cacheFetchedAt = null;
+        });
+      }
+    }
+
     try {
       final pos = await _locationService.getCurrentPosition();
+      if (!mounted) return;
+
+      // Param-keyed cache for this GPS + radius (may refine "last" payload).
+      final cachedAll = await _listCache.readObservations(
+        notable: false,
+        lat: pos.latitude,
+        lng: pos.longitude,
+        distKm: _distKm,
+      );
+      final cachedNotable = await _listCache.readObservations(
+        notable: true,
+        lat: pos.latitude,
+        lng: pos.longitude,
+        distKm: _distKm,
+      );
+      if (!mounted) return;
+      if (cachedAll != null) {
+        setState(() {
+          _applySightingsCache(
+            all: cachedAll.items,
+            notable: cachedNotable?.items ?? const [],
+            lat: pos.latitude,
+            lng: pos.longitude,
+            fetchedAt: cachedAll.fetchedAt,
+            position: pos,
+          );
+        });
+      } else {
+        setState(() {
+          _position = pos;
+          _lat = pos.latitude;
+          _lng = pos.longitude;
+        });
+      }
+
       final results = await Future.wait([
         _ebird.nearbyObservations(
           lat: pos.latitude,
@@ -103,20 +200,66 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
         ),
       ]);
       if (!mounted) return;
+
+      final all = results[0];
+      final notableRaw = results[1];
+      final fetchedAt = DateTime.now().toUtc();
+
+      await Future.wait([
+        _listCache.writeObservations(
+          notable: false,
+          lat: pos.latitude,
+          lng: pos.longitude,
+          distKm: _distKm,
+          items: all,
+          fetchedAt: fetchedAt,
+        ),
+        _listCache.writeObservations(
+          notable: true,
+          lat: pos.latitude,
+          lng: pos.longitude,
+          distKm: _distKm,
+          items: notableRaw,
+          fetchedAt: fetchedAt,
+        ),
+        _listCache.writeLastSightings(
+          CachedSightingsBundle(
+            fetchedAt: fetchedAt,
+            lat: pos.latitude,
+            lng: pos.longitude,
+            distKm: _distKm,
+            all: all,
+            notable: notableRaw,
+          ),
+        ),
+      ]);
+      if (!mounted) return;
+
       setState(() {
-        _position = pos;
-        _all = results[0];
-        // Notable endpoint returns every report; collapse to one row per
-        // species (most recent) so the list stays scannable like "All".
-        _notable = _mostRecentPerSpecies(results[1]);
-        _loading = false;
+        _applySightingsCache(
+          all: all,
+          notable: notableRaw,
+          lat: pos.latitude,
+          lng: pos.longitude,
+          fetchedAt: fetchedAt,
+          position: pos,
+        );
+        _showingStale = false;
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _error = e.toString();
-        _loading = false;
-      });
+      if (_hasListContent) {
+        setState(() {
+          _showingStale = true;
+          _loading = false;
+          _error = null;
+        });
+      } else {
+        setState(() {
+          _error = e.toString();
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -212,15 +355,17 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
   }
 
   void _openDetail(Observation obs) {
-    if (_position == null) return;
+    final lat = _lat ?? _position?.latitude;
+    final lng = _lng ?? _position?.longitude;
+    if (lat == null || lng == null) return;
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => SpeciesDetailScreen(
         apiKey: widget.apiKey,
         speciesCode: obs.speciesCode,
         comName: obs.comName,
         sciName: obs.sciName,
-        lat: _position!.latitude,
-        lng: _position!.longitude,
+        lat: lat,
+        lng: lng,
       ),
     ));
   }
@@ -271,6 +416,8 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
               ),
             ),
           ),
+          if (_showingStale && _cacheFetchedAt != null)
+            _StaleCacheBanner(fetchedAt: _cacheFetchedAt!),
           Expanded(child: _buildBody(list)),
         ],
       ),
@@ -422,6 +569,37 @@ class _FamilyGroup {
   final List<Observation> items;
 
   _FamilyGroup({required this.familyName, required this.items});
+}
+
+class _StaleCacheBanner extends StatelessWidget {
+  final DateTime fetchedAt;
+
+  const _StaleCacheBanner({required this.fetchedAt});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final when = formatRelativeTime(fetchedAt);
+
+    return Material(
+      color: scheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.sm,
+          AppSpacing.lg,
+          AppSpacing.sm,
+        ),
+        child: Text(
+          'Showing results from $when — couldn’t refresh',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Sticky family section header.

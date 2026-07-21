@@ -5,7 +5,6 @@
 - [ ] **Splash: cream background in all modes** - simpler fix than debugging the dark-mode asset bug; drop the separate dark splash variant entirely and use `#FAF6EE` + the loon in both light and dark system mode — see `docs/tickets/web-splash-dark-mode-bugfix.md`
 - [ ] **Screen-level hairline-vs-card pass** - replace the remaining tinted/bordered card sections (species detail description block, sightings section) with hairline dividers now that `lib/theme/` tokens exist to build from — per `docs/brand.md`'s surface philosophy
 - [ ] **Species search** - search all 10,000+ eBird species by name, not just ones seen recently nearby; needs a new search screen/flow against the taxonomy data already cached locally via `EbirdTaxonomyService`
-- [ ] **Offline caching** - stale-while-revalidate cache for sightings/hotspots so lists load instantly from last-known data and survive weak/no signal — see `docs/tickets/offline-caching.md`
 
 ## Waiting On
 
@@ -17,6 +16,7 @@
 
 ## Done
 
+- [x] ~~Offline caching (stale-while-revalidate for sightings + hotspots)~~ (2026-07-21)
 - [x] ~~Fix AppBar title typography (Public Sans page titles; species detail stays Newsreader)~~ (2026-07-21)
 - [x] ~~Sightings radius toggle (1–20 km bottom sheet, persisted, default 7 km)~~ (2026-07-21)
 - [x] ~~Loading states polish (skeleton rows/detail, map overlay spinner)~~ (2026-07-21)

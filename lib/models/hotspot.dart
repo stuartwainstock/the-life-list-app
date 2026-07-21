@@ -32,4 +32,14 @@ class Hotspot {
       numSpeciesAllTime: json['numSpeciesAllTime'],
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'locId': locId,
+        'locName': locName,
+        'lat': lat,
+        'lng': lng,
+        'countryCode': countryCode,
+        'subnational1Code': subnational1Code,
+        'numSpeciesAllTime': numSpeciesAllTime,
+      };
 }
