@@ -6,6 +6,7 @@ import '../services/ebird_service.dart';
 import '../services/wikipedia_service.dart';
 import '../services/life_list_service.dart';
 import '../utils/relative_time.dart';
+import '../theme/app_spacing.dart';
 import '../widgets/skeleton.dart';
 import '../widgets/species_detail_skeleton.dart';
 
@@ -22,9 +23,15 @@ import '../widgets/species_detail_skeleton.dart';
 /// a blank hero slab. Image uses `BoxFit.cover` in the flexible space;
 /// list thumbnails stay separate (contain/crop is a list concern).
 ///
+/// ## Recent sightings
+/// Capped to [_SightingsSection.initialCap] with in-place "View all N"
+/// expand (simpler than a second route). Long lists also get Today /
+/// Yesterday / This week / Earlier bands for scannability.
+/// See `docs/tickets/species-detail-sightings-list-polish.md`.
+///
 /// ## Life list FAB
-/// Extended FAB can cover the last sighting row; [_fabClearance] pads the
-/// scroll content so the feed can scroll clear of it.
+/// Extended FAB clearance uses FAB height + margin + system bottom inset
+/// so the last sighting row can scroll clear of the button.
 class SpeciesDetailScreen extends StatefulWidget {
   final String apiKey;
   final String speciesCode;
@@ -57,8 +64,9 @@ class _SpeciesDetailScreenState extends State<SpeciesDetailScreen> {
   WikiSummary? _summary;
   bool _isLogged = false;
 
-  /// FAB.extended height (~56) + margin (~16) + a little breathing room.
-  static const double _fabClearance = 88;
+  /// Extended FAB (~56) + default float margin (~16) + extra breathing room.
+  /// Bottom inset is added at build time for home-indicator devices.
+  static const double _fabClearanceBase = 96;
 
   bool get _hasPhoto {
     final url = _summary?.heroImageUrl;
@@ -86,7 +94,9 @@ class _SpeciesDetailScreenState extends State<SpeciesDetailScreen> {
     ]);
     if (!mounted) return;
     setState(() {
-      _sightings = results[0] as List<Observation>;
+      final list = List<Observation>.from(results[0] as List<Observation>)
+        ..sort((a, b) => b.obsDt.compareTo(a.obsDt));
+      _sightings = list;
       _summary = results[1] as WikiSummary?;
       _loading = false;
     });
@@ -196,6 +206,8 @@ class _SpeciesDetailScreenState extends State<SpeciesDetailScreen> {
   Widget _buildBody(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final fabClearance =
+        _fabClearanceBase + MediaQuery.paddingOf(context).bottom;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
@@ -229,7 +241,7 @@ class _SpeciesDetailScreenState extends State<SpeciesDetailScreen> {
             DecoratedBox(
               decoration: BoxDecoration(
                 color: scheme.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppRadius.md),
               ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -250,8 +262,8 @@ class _SpeciesDetailScreenState extends State<SpeciesDetailScreen> {
           // its own tinted surface so it doesn't blend into the wiki blurb.
           _SightingsSection(sightings: _sightings),
 
-          // Keep last rows above the extended FAB.
-          const SizedBox(height: _fabClearance),
+          // Keep last rows above the extended FAB (+ home indicator).
+          SizedBox(height: fabClearance),
         ],
       ),
     );
@@ -346,21 +358,38 @@ class _HeroBackButton extends StatelessWidget {
   }
 }
 
-class _SightingsSection extends StatelessWidget {
+class _SightingsSection extends StatefulWidget {
+  /// Most-recent entries shown before "View all N sightings".
+  static const int initialCap = 10;
+
   final List<Observation> sightings;
 
   const _SightingsSection({required this.sightings});
+
+  @override
+  State<_SightingsSection> createState() => _SightingsSectionState();
+}
+
+class _SightingsSectionState extends State<_SightingsSection> {
+  bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final accent = scheme.primary;
+    final sightings = widget.sightings;
+    final total = sightings.length;
+    final capped = !_expanded && total > _SightingsSection.initialCap;
+    final visible = capped
+        ? sightings.take(_SightingsSection.initialCap).toList()
+        : sightings;
+    final bands = _groupByRecency(visible);
 
     return DecoratedBox(
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.md),
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
@@ -383,10 +412,10 @@ class _SightingsSection extends StatelessWidget {
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
                     color: accent.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(999),
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
                   ),
                   child: Text(
-                    '${sightings.length}',
+                    '$total',
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: accent,
                       fontWeight: FontWeight.w700,
@@ -406,15 +435,91 @@ class _SightingsSection extends StatelessWidget {
                   ),
                 ),
               )
-            else
-              ...sightings.map(
-                (s) => _SightingRow(observation: s),
-              ),
+            else ...[
+              for (final band in bands) ...[
+                if (bands.length > 1)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8, bottom: 4),
+                    child: Text(
+                      band.label,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ...band.items.map((s) => _SightingRow(observation: s)),
+              ],
+              if (capped)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4, bottom: 4),
+                  child: TextButton(
+                    onPressed: () => setState(() => _expanded = true),
+                    style: TextButton.styleFrom(
+                      foregroundColor: accent,
+                      textStyle: theme.textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(0, 40),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: Text('View all $total sightings'),
+                  ),
+                ),
+              if (_expanded && total > _SightingsSection.initialCap)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4, bottom: 4),
+                  child: TextButton(
+                    onPressed: () => setState(() => _expanded = false),
+                    style: TextButton.styleFrom(
+                      foregroundColor: scheme.onSurfaceVariant,
+                      textStyle: theme.textTheme.labelLarge,
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(0, 40),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text('Show less'),
+                  ),
+                ),
+            ],
           ],
         ),
       ),
     );
   }
+
+  /// Groups already-sorted (newest-first) rows into recency bands.
+  List<_RecencyBand> _groupByRecency(List<Observation> list) {
+    final bands = <_RecencyBand>[];
+    String? currentLabel;
+    var bucket = <Observation>[];
+
+    for (final obs in list) {
+      final label = formatRecencyBand(obs.obsDt);
+      if (currentLabel == null) {
+        currentLabel = label;
+        bucket = [obs];
+      } else if (label == currentLabel) {
+        bucket.add(obs);
+      } else {
+        bands.add(_RecencyBand(label: currentLabel, items: bucket));
+        currentLabel = label;
+        bucket = [obs];
+      }
+    }
+    if (currentLabel != null && bucket.isNotEmpty) {
+      bands.add(_RecencyBand(label: currentLabel, items: bucket));
+    }
+    return bands;
+  }
+}
+
+class _RecencyBand {
+  final String label;
+  final List<Observation> items;
+
+  _RecencyBand({required this.label, required this.items});
 }
 
 class _SightingRow extends StatelessWidget {

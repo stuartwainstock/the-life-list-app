@@ -7,6 +7,7 @@ import '../services/ebird_service.dart';
 import '../services/location_service.dart';
 import '../theme/app_spacing.dart';
 import '../utils/relative_time.dart';
+import '../widgets/hotspot_detail_sheet.dart';
 import '../widgets/skeleton.dart';
 
 /// Map of nearby eBird hotspots, using OpenStreetMap tiles via flutter_map
@@ -16,6 +17,10 @@ import '../widgets/skeleton.dart';
 /// (`docs/tickets/offline-caching.md`). Default search radius matches
 /// [EbirdService.nearbyHotspots] (25 km) — sightings radius toggle is
 /// intentionally separate.
+///
+/// Marker detail uses a persistent peek sheet ([HotspotDetailSheet]) inside
+/// this screen's body — never `showModalBottomSheet`, so it stays above the
+/// shell nav and the map remains interactive.
 class HotspotsMapScreen extends StatefulWidget {
   final String apiKey;
   const HotspotsMapScreen({super.key, required this.apiKey});
@@ -38,6 +43,7 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
   DateTime? _cacheFetchedAt;
   List<Hotspot> _hotspots = [];
   LatLng? _center;
+  Hotspot? _selected;
 
   @override
   void initState() {
@@ -180,7 +186,16 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
     return Stack(
       children: [
         FlutterMap(
-          options: MapOptions(initialCenter: _center!, initialZoom: 11),
+          options: MapOptions(
+            initialCenter: _center!,
+            initialZoom: 11,
+            // Empty-map tap dismisses the persistent sheet (not modal).
+            onTap: (_, __) {
+              if (_selected != null) {
+                setState(() => _selected = null);
+              }
+            },
+          ),
           children: [
             TileLayer(
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -200,9 +215,14 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
                     width: 36,
                     height: 36,
                     child: GestureDetector(
-                      onTap: () => _showHotspotSheet(h),
-                      child: const Icon(Icons.location_on,
-                          color: Colors.redAccent, size: 32),
+                      onTap: () => setState(() => _selected = h),
+                      child: Icon(
+                        Icons.location_on,
+                        color: _selected?.locId == h.locId
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.redAccent,
+                        size: 32,
+                      ),
                     ),
                   ),
                 ),
@@ -240,10 +260,10 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
           Positioned(
             left: 16,
             right: 16,
-            bottom: 24,
+            bottom: _selected == null ? 24 : 140,
             child: Material(
               elevation: 2,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppRadius.md),
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: Row(
@@ -255,26 +275,14 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
               ),
             ),
           ),
+        // Persistent peek sheet — above nav (this Stack is the tab body),
+        // map stays pannable; marker taps swap content in place.
+        if (_selected != null)
+          HotspotDetailSheet(
+            hotspot: _selected!,
+            onDismiss: () => setState(() => _selected = null),
+          ),
       ],
-    );
-  }
-
-  void _showHotspotSheet(Hotspot h) {
-    showModalBottomSheet(
-      context: context,
-      builder: (_) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(h.locName, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            if (h.numSpeciesAllTime != null)
-              Text('${h.numSpeciesAllTime} species recorded all-time'),
-          ],
-        ),
-      ),
     );
   }
 }

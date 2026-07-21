@@ -16,6 +16,8 @@
 
 ## Done
 
+- [x] ~~Standardize hotspot marker detail panel (persistent peek sheet above nav)~~ (2026-07-21)
+- [x] ~~Species detail: cap long sightings list + FAB clearance~~ (2026-07-21)
 - [x] ~~Offline caching (stale-while-revalidate for sightings + hotspots)~~ (2026-07-21)
 - [x] ~~Fix AppBar title typography (Public Sans page titles; species detail stays Newsreader)~~ (2026-07-21)
 - [x] ~~Sightings radius toggle (1–20 km bottom sheet, persisted, default 7 km)~~ (2026-07-21)

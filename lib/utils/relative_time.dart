@@ -36,3 +36,19 @@ String formatRelativeTime(DateTime when, {DateTime? now}) {
   }
   return DateFormat.yMMMd().format(when);
 }
+
+/// Coarse recency band for grouping long per-species sighting lists.
+///
+/// Order is chronological when sorted most-recent-first: Today → Yesterday →
+/// This week → Earlier.
+String formatRecencyBand(DateTime when, {DateTime? now}) {
+  final current = now ?? DateTime.now();
+  final startOfToday = DateTime(current.year, current.month, current.day);
+  final startOfWhen = DateTime(when.year, when.month, when.day);
+  final dayDiff = startOfToday.difference(startOfWhen).inDays;
+
+  if (dayDiff <= 0) return 'Today';
+  if (dayDiff == 1) return 'Yesterday';
+  if (dayDiff < 7) return 'This week';
+  return 'Earlier';
+}
