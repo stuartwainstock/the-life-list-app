@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 import '../models/hotspot.dart';
 import '../services/ebird_service.dart';
 import '../services/location_service.dart';
+import '../widgets/skeleton.dart';
 
 /// Map of nearby eBird hotspots, using OpenStreetMap tiles via flutter_map
 /// so no Google Maps API key / billing setup is required.
@@ -37,16 +38,23 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
     });
     try {
       final pos = await _locationService.getCurrentPosition();
+      if (!mounted) return;
+      // Show the map + user pin as soon as we have a fix; hotspots load
+      // under a lightweight overlay (loading-states-polish).
+      setState(() {
+        _center = LatLng(pos.latitude, pos.longitude);
+      });
       final hotspots = await _ebird.nearbyHotspots(
         lat: pos.latitude,
         lng: pos.longitude,
       );
+      if (!mounted) return;
       setState(() {
-        _center = LatLng(pos.latitude, pos.longitude);
         _hotspots = hotspots;
         _loading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.toString();
         _loading = false;
@@ -71,10 +79,8 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
   }
 
   Widget _buildBody() {
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (_error != null) {
+    // Location failed before we could place the map.
+    if (_error != null && _center == null) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -91,35 +97,70 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
         ),
       );
     }
-    return FlutterMap(
-      options: MapOptions(initialCenter: _center!, initialZoom: 11),
+
+    // Still resolving location — nothing to pin yet.
+    if (_center == null) {
+      return const Center(child: BrandProgressIndicator());
+    }
+
+    return Stack(
       children: [
-        TileLayer(
-          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          userAgentPackageName: 'com.thelifelist.app',
-        ),
-        MarkerLayer(
-          markers: [
-            Marker(
-              point: _center!,
-              width: 30,
-              height: 30,
-              child: const Icon(Icons.my_location, color: Colors.blue),
+        FlutterMap(
+          options: MapOptions(initialCenter: _center!, initialZoom: 11),
+          children: [
+            TileLayer(
+              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              userAgentPackageName: 'com.thelifelist.app',
             ),
-            ..._hotspots.map(
-              (h) => Marker(
-                point: LatLng(h.lat, h.lng),
-                width: 36,
-                height: 36,
-                child: GestureDetector(
-                  onTap: () => _showHotspotSheet(h),
-                  child: const Icon(Icons.location_on,
-                      color: Colors.redAccent, size: 32),
+            MarkerLayer(
+              markers: [
+                Marker(
+                  point: _center!,
+                  width: 30,
+                  height: 30,
+                  child: const Icon(Icons.my_location, color: Colors.blue),
                 ),
-              ),
+                ..._hotspots.map(
+                  (h) => Marker(
+                    point: LatLng(h.lat, h.lng),
+                    width: 36,
+                    height: 36,
+                    child: GestureDetector(
+                      onTap: () => _showHotspotSheet(h),
+                      child: const Icon(Icons.location_on,
+                          color: Colors.redAccent, size: 32),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
+        if (_loading)
+          const Positioned.fill(
+            child: IgnorePointer(
+              child: Center(child: BrandProgressIndicator()),
+            ),
+          ),
+        if (_error != null && !_loading)
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 24,
+            child: Material(
+              elevation: 2,
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    Expanded(child: Text(_error!, maxLines: 2)),
+                    TextButton(onPressed: _load, child: const Text('Retry')),
+                  ],
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }

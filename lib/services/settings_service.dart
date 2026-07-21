@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// On-device settings: eBird API key + appearance preference.
+/// On-device settings: eBird API key, appearance, and sightings search radius.
 ///
 /// ## Why not .env / dart-define for the key?
 /// Keys are per-user and must never ship in the repo or binary. The user
@@ -10,6 +10,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 class SettingsService {
   static const _apiKeyPref = 'ebird_api_key';
   static const _themeModePref = 'theme_mode';
+  static const _sightingsRadiusKmPref = 'sightings_radius_km';
+
+  /// First-launch default for nearby sightings (see radius-toggle ticket).
+  static const defaultSightingsRadiusKm = 7;
+  static const minSightingsRadiusKm = 1;
+  static const maxSightingsRadiusKm = 20;
 
   Future<String?> getApiKey() async {
     final prefs = await SharedPreferences.getInstance();
@@ -35,6 +41,24 @@ class SettingsService {
   Future<void> setThemeMode(ThemeMode mode) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_themeModePref, themeModeToStorage(mode));
+  }
+
+  /// Nearby sightings search radius in whole km. Defaults to
+  /// [defaultSightingsRadiusKm] when unset; always clamped to
+  /// [minSightingsRadiusKm]–[maxSightingsRadiusKm].
+  Future<int> getSightingsRadiusKm() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getInt(_sightingsRadiusKmPref);
+    if (raw == null) return defaultSightingsRadiusKm;
+    return raw.clamp(minSightingsRadiusKm, maxSightingsRadiusKm);
+  }
+
+  Future<void> setSightingsRadiusKm(int km) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(
+      _sightingsRadiusKmPref,
+      km.clamp(minSightingsRadiusKm, maxSightingsRadiusKm),
+    );
   }
 
   static String themeModeToStorage(ThemeMode mode) {

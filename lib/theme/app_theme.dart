@@ -106,6 +106,7 @@ abstract final class AppTheme {
         foregroundColor: ink,
         elevation: 0,
         scrolledUnderElevation: 0,
+        // titleLarge = Public Sans page chrome (not Newsreader).
         titleTextStyle: textTheme.titleLarge,
       ),
       navigationBarTheme: NavigationBarThemeData(

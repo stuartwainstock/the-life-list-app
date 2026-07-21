@@ -5,12 +5,11 @@
 - [ ] **Splash: cream background in all modes** - simpler fix than debugging the dark-mode asset bug; drop the separate dark splash variant entirely and use `#FAF6EE` + the loon in both light and dark system mode — see `docs/tickets/web-splash-dark-mode-bugfix.md`
 - [ ] **Screen-level hairline-vs-card pass** - replace the remaining tinted/bordered card sections (species detail description block, sightings section) with hairline dividers now that `lib/theme/` tokens exist to build from — per `docs/brand.md`'s surface philosophy
 - [ ] **Species search** - search all 10,000+ eBird species by name, not just ones seen recently nearby; needs a new search screen/flow against the taxonomy data already cached locally via `EbirdTaxonomyService`
+- [ ] **Offline caching** - stale-while-revalidate cache for sightings/hotspots so lists load instantly from last-known data and survive weak/no signal — see `docs/tickets/offline-caching.md`
 
 ## Waiting On
 
 ## Someday
-
-- [ ] **Offline caching** - cache last sightings/hotspots results so the list isn't empty with no signal
 - [ ] **Bird call audio** - Xeno-canto has a free public API (https://xeno-canto.org/explore/api), could slot in next to the Wikipedia photo on the species page
 - [ ] **Life list Phase 2: export to eBird** - package logged sightings into eBird's checklist-format CSV, hand off to eBird's own import page
 - [ ] **Life list Phase 3: deep-link hand-off** - share/deep-link into eBird's own app to submit a live checklist, pre-filled with as much context as possible
@@ -18,6 +17,9 @@
 
 ## Done
 
+- [x] ~~Fix AppBar title typography (Public Sans page titles; species detail stays Newsreader)~~ (2026-07-21)
+- [x] ~~Sightings radius toggle (1–20 km bottom sheet, persisted, default 7 km)~~ (2026-07-21)
+- [x] ~~Loading states polish (skeleton rows/detail, map overlay spinner)~~ (2026-07-21)
 - [x] ~~Scaffold core Flutter app (sightings, hotspots, species detail, settings, eBird API integration, location)~~ (2026-07-20)
 - [x] ~~Build Life List feature, Phase 1 (local-only add/view/remove)~~ (2026-07-20)
 - [x] ~~Add web platform support + local CORS proxy for browser testing~~ (2026-07-20)

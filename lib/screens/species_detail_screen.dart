@@ -6,6 +6,8 @@ import '../services/ebird_service.dart';
 import '../services/wikipedia_service.dart';
 import '../services/life_list_service.dart';
 import '../utils/relative_time.dart';
+import '../widgets/skeleton.dart';
+import '../widgets/species_detail_skeleton.dart';
 
 /// Species detail — identity, Wikipedia context, nearby sightings feed.
 ///
@@ -160,13 +162,21 @@ class _SpeciesDetailScreenState extends State<SpeciesDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // No photo (or still loading): standard app bar. Photo hero owns
-      // the back button via SliverAppBar once content is ready.
-      appBar: (_loading || !_hasPhoto)
-          ? AppBar(title: Text(widget.comName))
-          : null,
+      // Loading uses a skeleton hero with its own back control. Once loaded,
+      // photo → SliverAppBar; no photo → standard AppBar with serif title.
+      appBar: (_loading || _hasPhoto)
+          ? null
+          : AppBar(
+              title: Text(
+                widget.comName,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? SpeciesDetailSkeleton(
+              comName: widget.comName,
+              sciName: widget.sciName,
+            )
           : CustomScrollView(
               slivers: [
                 if (_hasPhoto) _HeroAppBar(imageUrl: _summary!.heroImageUrl!),
@@ -279,7 +289,7 @@ class _HeroAppBar extends StatelessWidget {
               fit: BoxFit.cover,
               alignment: Alignment.center,
               placeholder: (_, __) => const Center(
-                child: CircularProgressIndicator(),
+                child: BrandProgressIndicator(),
               ),
               errorWidget: (_, __, ___) => Center(
                 child: Icon(

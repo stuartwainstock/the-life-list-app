@@ -76,9 +76,21 @@ Two typefaces, each with a clear job:
 | Display | Newsreader | 28–32, Medium/SemiBold | Species common name (detail page) |
 | Sub-display (italic) | Newsreader Italic | 15–16, Regular | Scientific name |
 | Body | Newsreader | 16, Regular, generous line-height (1.5+) | Wikipedia description paragraph |
+| **AppBar / page title** | **Public Sans** | **20–22, SemiBold** | **"Nearby Sightings," "Hotspots," "My Life List," "Settings" — every top-level screen title** |
 | Section label | Public Sans | 13, SemiBold, letter-spacing +0.3 | "Recent sightings near you," family group headers |
 | UI label | Public Sans | 14–15, Medium | Buttons, nav labels, form labels |
 | Metadata | Public Sans | 13, Regular, muted ink color | Location, relative time, counts |
+
+**Note on AppBar titles specifically:** these were an ambiguous gap in
+the original scale, not a deliberate serif choice — they ended up
+rendered in Newsreader by default alongside species names, which reads
+as if the screen title and the bird's name carry equal weight as
+"content." An AppBar title is navigational chrome (the same job as the
+bottom nav labels and the segmented filter control sitting right below
+it), not reading content, so it belongs with the sans/UI group. This
+also sharpens the hierarchy rather than flattening it — serif becomes
+exclusively the species name's territory, making it stand out more on a
+screen that's otherwise all sans chrome, not less.
 
 ## Surface philosophy
 

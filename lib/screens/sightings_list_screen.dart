@@ -5,7 +5,10 @@ import '../models/observation.dart';
 import '../services/ebird_service.dart';
 import '../services/ebird_taxonomy_service.dart';
 import '../services/location_service.dart';
+import '../services/settings_service.dart';
+import '../theme/app_spacing.dart';
 import '../widgets/sighting_list_row.dart';
+import '../widgets/skeleton_sighting_row.dart';
 import 'species_detail_screen.dart';
 
 /// Nearby sightings — the app's primary screen (GoBird's main loop).
@@ -32,7 +35,13 @@ import 'species_detail_screen.dart';
 /// never blocks on a huge taxonomy download. When the lookup arrives,
 /// we regroup in place.
 ///
-/// Ticket: `docs/tickets/sightings-list-redesign.md`
+/// ## Search radius
+/// Tune icon → bottom sheet slider (1–20 km). Label updates while dragging;
+/// persist + refetch run on release (`Slider.onChangeEnd`) so we don't
+/// hammer eBird mid-drag. Default 7 km via [SettingsService].
+///
+/// Ticket: `docs/tickets/sightings-list-redesign.md`,
+/// `docs/tickets/sightings-radius-toggle.md`
 class SightingsListScreen extends StatefulWidget {
   final String apiKey;
   const SightingsListScreen({super.key, required this.apiKey});
@@ -44,6 +53,7 @@ class SightingsListScreen extends StatefulWidget {
 class _SightingsListScreenState extends State<SightingsListScreen> {
   final _locationService = LocationService();
   final _taxonomy = EbirdTaxonomyService();
+  final _settings = SettingsService();
   late final EbirdService _ebird = EbirdService(widget.apiKey);
 
   bool _loading = true;
@@ -52,6 +62,7 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
   List<Observation> _all = [];
   List<Observation> _notable = [];
   bool _showNotableOnly = false;
+  int _distKm = SettingsService.defaultSightingsRadiusKm;
 
   /// Null while taxonomy is loading/unavailable — triggers flat-list fallback.
   Map<String, TaxonomyEntry>? _taxonomyLookup;
@@ -59,20 +70,37 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
-    _loadTaxonomy();
+    _init();
   }
 
-  Future<void> _load() async {
+  Future<void> _init() async {
+    final radius = await _settings.getSightingsRadiusKm();
+    if (!mounted) return;
+    setState(() => _distKm = radius);
+    await Future.wait([_load(), _loadTaxonomy()]);
+  }
+
+  Future<void> _load({bool keepContent = false}) async {
+    // Skeleton for initial load / radius change; pull-to-refresh and the
+    // AppBar refresh icon keep existing rows and use RefreshIndicator /
+    // disabled-button feedback instead (loading-states-polish).
     setState(() {
-      _loading = true;
+      if (!keepContent) _loading = true;
       _error = null;
     });
     try {
       final pos = await _locationService.getCurrentPosition();
       final results = await Future.wait([
-        _ebird.nearbyObservations(lat: pos.latitude, lng: pos.longitude),
-        _ebird.nearbyNotableObservations(lat: pos.latitude, lng: pos.longitude),
+        _ebird.nearbyObservations(
+          lat: pos.latitude,
+          lng: pos.longitude,
+          distKm: _distKm,
+        ),
+        _ebird.nearbyNotableObservations(
+          lat: pos.latitude,
+          lng: pos.longitude,
+          distKm: _distKm,
+        ),
       ]);
       if (!mounted) return;
       setState(() {
@@ -90,6 +118,78 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
         _loading = false;
       });
     }
+  }
+
+  void _openRadiusSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        final theme = Theme.of(sheetContext);
+        final scheme = theme.colorScheme;
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.xl,
+              AppSpacing.sm,
+              AppSpacing.xl,
+              AppSpacing.xl,
+            ),
+            child: StatefulBuilder(
+              builder: (context, setSheetState) {
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Search within $_distKm km',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: scheme.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        activeTrackColor: scheme.primary,
+                        thumbColor: scheme.primary,
+                        overlayColor: scheme.primary.withValues(alpha: 0.12),
+                        inactiveTrackColor:
+                            scheme.primary.withValues(alpha: 0.24),
+                        valueIndicatorColor: scheme.primary,
+                      ),
+                      child: Slider(
+                        value: _distKm.toDouble(),
+                        min: SettingsService.minSightingsRadiusKm.toDouble(),
+                        max: SettingsService.maxSightingsRadiusKm.toDouble(),
+                        divisions: SettingsService.maxSightingsRadiusKm -
+                            SettingsService.minSightingsRadiusKm,
+                        label: '$_distKm km',
+                        onChanged: (value) {
+                          final km = value.round();
+                          setSheetState(() {});
+                          setState(() => _distKm = km);
+                        },
+                        onChangeEnd: (value) async {
+                          final km = value.round();
+                          await _settings.setSightingsRadiusKm(km);
+                          if (!mounted) return;
+                          _load();
+                        },
+                      ),
+                    ),
+                    Text(
+                      '1–${SettingsService.maxSightingsRadiusKm} km',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
   }
 
   /// Keeps the newest observation for each speciesCode.
@@ -134,8 +234,13 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
         title: const Text('Nearby Sightings'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.tune),
+            tooltip: 'Search radius',
+            onPressed: _openRadiusSheet,
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _loading ? null : _load,
+            onPressed: _loading ? null : () => _load(keepContent: true),
           ),
         ],
       ),
@@ -174,7 +279,7 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
 
   Widget _buildBody(List<Observation> list) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const SightingsListSkeleton();
     }
     if (_error != null) {
       return Center(
@@ -202,7 +307,7 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
     // Same row widget as the grouped path — only structure differs.
     if (lookup == null) {
       return RefreshIndicator(
-        onRefresh: _load,
+        onRefresh: () => _load(keepContent: true),
         child: ListView.separated(
           itemCount: list.length,
           separatorBuilder: (_, __) => const Divider(height: 1),
@@ -222,7 +327,7 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
 
     final groups = _groupByFamily(list, lookup);
     return RefreshIndicator(
-      onRefresh: _load,
+      onRefresh: () => _load(keepContent: true),
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [

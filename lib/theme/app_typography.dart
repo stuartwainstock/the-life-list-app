@@ -7,17 +7,23 @@ import 'app_colors.dart';
 ///
 /// - **Newsreader** (serif): content you read — species names, scientific
 ///   names, Wikipedia body.
-/// - **Public Sans** (sans): interface you use — nav, buttons, section
-///   eyebrows, metadata.
+/// - **Public Sans** (sans): interface you use — AppBar/page titles, nav,
+///   buttons, section eyebrows, metadata.
 ///
 /// Roles are mapped to what existing screens already request via
 /// `Theme.of(context).textTheme` so this cascades without per-screen edits:
 /// - `headlineMedium` → detail common name (display)
-/// - `titleMedium` → list species name
+/// - `titleLarge` → AppBar / page titles ("Nearby Sightings", etc.) — sans
+/// - `titleMedium` → list species name (serif)
 /// - `labelMedium` → scientific name (screens already italicize this role)
 /// - `bodyMedium` / `bodyLarge` → Wikipedia body
 /// - `titleSmall` / `labelLarge` → section eyebrows (family headers, etc.)
 /// - `bodySmall` → location / relative time / counts
+///
+/// [AppBarTheme.titleTextStyle] is wired to [titleLarge] in [AppTheme], so
+/// generic screen titles pick up Public Sans centrally. Species detail's
+/// no-photo AppBar is the exception — it shows the species common name as
+/// content, so that screen opts into Newsreader explicitly.
 ///
 /// ## Font loading choice (v1)
 /// Runtime fetch via `google_fonts` (package default), per `docs/brand.md`.
@@ -34,7 +40,7 @@ abstract final class AppTypography {
         : AppColors.darkMutedInk;
 
     return TextTheme(
-      // Display — species common name on the detail page.
+      // Display — species common name on the detail page (below hero).
       headlineMedium: GoogleFonts.newsreader(
         fontSize: 30,
         fontWeight: FontWeight.w600,
@@ -47,16 +53,17 @@ abstract final class AppTypography {
         height: 1.15,
         color: ink,
       ),
-      // List row species names.
+      // List row species names (serif content).
       titleMedium: GoogleFonts.newsreader(
         fontSize: 17,
         fontWeight: FontWeight.w600,
         height: 1.2,
         color: ink,
       ),
-      // App bar / chrome titles — sans so UI doesn't look literary.
+      // AppBar / page titles — Public Sans chrome, not literary serif
+      // (brand.md "AppBar / page title" row: 20–22 SemiBold).
       titleLarge: GoogleFonts.publicSans(
-        fontSize: 18,
+        fontSize: 21,
         fontWeight: FontWeight.w600,
         height: 1.2,
         color: ink,
