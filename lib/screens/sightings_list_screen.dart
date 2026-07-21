@@ -12,6 +12,7 @@ import '../utils/relative_time.dart';
 import '../widgets/sighting_list_row.dart';
 import '../widgets/skeleton_sighting_row.dart';
 import 'species_detail_screen.dart';
+import 'species_search_screen.dart';
 
 /// Nearby sightings — the app's primary screen (GoBird's main loop).
 ///
@@ -47,6 +48,10 @@ import 'species_detail_screen.dart';
 /// refreshes in the background. Fetch failure with cache keeps the list and
 /// shows a muted "couldn't refresh" line — see
 /// `docs/tickets/offline-caching.md`.
+///
+/// ## Species search
+/// Search icon opens [SpeciesSearchScreen] over the full taxonomy cache
+/// (`docs/tickets/species-search.md`).
 ///
 /// Ticket: `docs/tickets/sightings-list-redesign.md`,
 /// `docs/tickets/sightings-radius-toggle.md`
@@ -370,6 +375,19 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
     ));
   }
 
+  void _openSearch() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SpeciesSearchScreen(
+          apiKey: widget.apiKey,
+          lat: _lat ?? _position?.latitude,
+          lng: _lng ?? _position?.longitude,
+          initialLookup: _taxonomyLookup,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final list = _showNotableOnly ? _notable : _all;
@@ -378,6 +396,11 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
       appBar: AppBar(
         title: const Text('Nearby Sightings'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            tooltip: 'Search species',
+            onPressed: _openSearch,
+          ),
           IconButton(
             icon: const Icon(Icons.tune),
             tooltip: 'Search radius',

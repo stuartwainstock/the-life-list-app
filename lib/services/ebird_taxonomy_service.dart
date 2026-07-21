@@ -7,33 +7,47 @@ import 'package:http/http.dart' as http;
 import 'taxonomy_cache_stub.dart'
     if (dart.library.io) 'taxonomy_cache_io.dart' as cache_store;
 
-/// Compact taxonomy row used for grouping the sightings list.
+/// Compact taxonomy row for family-grouping **and** species search.
 ///
-/// Sourced from `GET /v2/ref/taxonomy/ebird?fmt=json`. We only keep what
-/// grouping needs — not the full species record — to keep the cache leaner.
+/// Sourced from `GET /v2/ref/taxonomy/ebird?fmt=json`. We keep names plus
+/// family/order — enough for sticky headers and local substring search
+/// without storing the full eBird species record.
 class TaxonomyEntry {
+  final String speciesCode;
+  final String comName;
+  final String sciName;
   final String familyComName;
   final int taxonOrder;
 
   const TaxonomyEntry({
+    required this.speciesCode,
+    required this.comName,
+    required this.sciName,
     required this.familyComName,
     required this.taxonOrder,
   });
 
   Map<String, dynamic> toJson() => {
+        'speciesCode': speciesCode,
+        'comName': comName,
+        'sciName': sciName,
         'familyComName': familyComName,
         'taxonOrder': taxonOrder,
       };
 
   factory TaxonomyEntry.fromJson(Map<String, dynamic> json) {
     return TaxonomyEntry(
+      speciesCode: json['speciesCode'] as String? ?? '',
+      comName: json['comName'] as String? ?? '',
+      sciName: json['sciName'] as String? ?? '',
       familyComName: json['familyComName'] as String? ?? 'Other',
       taxonOrder: (json['taxonOrder'] as num?)?.toInt() ?? 999999,
     );
   }
 }
 
-/// Fetches + caches eBird's full taxonomy so we can group sightings by family.
+/// Fetches + caches eBird's full taxonomy so we can group sightings by family
+/// and search species by name.
 ///
 /// ## Why a separate service
 /// Nearby-observation payloads don't include `familyComName` / `taxonOrder`.
@@ -53,13 +67,17 @@ class TaxonomyEntry {
 /// ## Filter
 /// We keep `category == "species"` only. Subspecies / hybrids / spuhs in
 /// observation data that don't match land in the UI's "Other" bucket.
+///
+/// ## Cache version
+/// `ebird_taxonomy_v2.json` — bumped when [TaxonomyEntry] gained
+/// `comName`/`sciName` for search so v1 disk files aren't read incomplete.
 class EbirdTaxonomyService {
   static const _baseUrl = String.fromEnvironment(
     'EBIRD_BASE_URL',
     defaultValue: 'https://api.ebird.org/v2',
   );
 
-  static const _cacheFileName = 'ebird_taxonomy_v1.json';
+  static const _cacheFileName = 'ebird_taxonomy_v2.json';
   static const _maxAge = Duration(days: 30);
 
   /// In-memory session cache so we don't re-parse the file every reopen.
@@ -101,6 +119,34 @@ class EbirdTaxonomyService {
     }
   }
 
+  /// Case-insensitive substring match on **common name only**.
+  ///
+  /// Scientific epithets share roots across unrelated genera (e.g.
+  /// "pileatus"), so matching `sciName` made results noisy — see
+  /// `docs/tickets/species-search-common-name-only.md`. `sciName` remains
+  /// on [TaxonomyEntry] for display and detail navigation.
+  ///
+  /// Results are sorted by common name and capped so a one-letter query
+  /// doesn't dump thousands of rows into a ListView.
+  static List<TaxonomyEntry> search(
+    Map<String, TaxonomyEntry> lookup,
+    String query, {
+    int limit = 75,
+  }) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return const [];
+
+    final hits = <TaxonomyEntry>[];
+    for (final entry in lookup.values) {
+      if (entry.comName.toLowerCase().contains(q)) {
+        hits.add(entry);
+      }
+    }
+    hits.sort((a, b) => a.comName.compareTo(b.comName));
+    if (hits.length <= limit) return hits;
+    return hits.sublist(0, limit);
+  }
+
   Future<_TaxonomyCache> _fetch(String apiKey) async {
     final uri = Uri.parse('$_baseUrl/ref/taxonomy/ebird').replace(
       queryParameters: {'fmt': 'json'},
@@ -122,6 +168,9 @@ class EbirdTaxonomyService {
       if (code == null || code.isEmpty) continue;
       final family = (map['familyComName'] as String?)?.trim();
       entries[code] = TaxonomyEntry(
+        speciesCode: code,
+        comName: (map['comName'] as String?)?.trim() ?? '',
+        sciName: (map['sciName'] as String?)?.trim() ?? '',
         familyComName: (family == null || family.isEmpty) ? 'Other' : family,
         taxonOrder: (map['taxonOrder'] as num?)?.toInt() ?? 999999,
       );
@@ -181,10 +230,12 @@ class _TaxonomyCache {
       fetchedAt: DateTime.tryParse(json['fetchedAt'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
       entries: rawEntries.map(
-        (k, v) => MapEntry(
-          k,
-          TaxonomyEntry.fromJson(v as Map<String, dynamic>),
-        ),
+        (k, v) {
+          final map = Map<String, dynamic>.from(v as Map);
+          // Older/partial rows may omit speciesCode — fall back to map key.
+          map.putIfAbsent('speciesCode', () => k);
+          return MapEntry(k, TaxonomyEntry.fromJson(map));
+        },
       ),
     );
   }

@@ -279,7 +279,11 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
         // map stays pannable; marker taps swap content in place.
         if (_selected != null)
           HotspotDetailSheet(
+            key: ValueKey(_selected!.locId),
             hotspot: _selected!,
+            apiKey: widget.apiKey,
+            lat: _center!.latitude,
+            lng: _center!.longitude,
             onDismiss: () => setState(() => _selected = null),
           ),
       ],

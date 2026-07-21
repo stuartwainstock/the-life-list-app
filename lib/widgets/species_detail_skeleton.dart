@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_spacing.dart';
+import 'app_hairline.dart';
 import 'skeleton.dart';
 
 /// Species-detail loading layout: hero slab + identity + description + feed.
@@ -95,75 +96,60 @@ class SpeciesDetailSkeleton extends StatelessWidget {
                     ),
                   ),
                 ],
-                const SizedBox(height: 20),
-                // Description card — matches loaded DecoratedBox padding.
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: scheme.surfaceContainerLow,
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                  ),
-                  child: const Padding(
-                    padding: EdgeInsets.all(AppSpacing.lg),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SkeletonBox(width: double.infinity, height: 14),
-                        SizedBox(height: AppSpacing.sm),
-                        SkeletonBox(width: double.infinity, height: 14),
-                        SizedBox(height: AppSpacing.sm),
-                        SkeletonBox(width: 220, height: 14),
-                      ],
-                    ),
+                const SizedBox(height: AppSpacing.xl),
+                const AppHairline(),
+                // Description — hairline separation (matches loaded layout).
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SkeletonBox(width: double.infinity, height: 14),
+                      SizedBox(height: AppSpacing.sm),
+                      SkeletonBox(width: double.infinity, height: 14),
+                      SizedBox(height: AppSpacing.sm),
+                      SkeletonBox(width: 220, height: 14),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 28),
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: scheme.surfaceContainerHighest.withValues(
-                      alpha: 0.55,
-                    ),
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SkeletonBox(width: 180, height: 14),
-                        const SizedBox(height: AppSpacing.sm),
-                        for (var i = 0; i < 3; i++) ...[
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 10),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                SkeletonBox(
-                                  width: 20,
-                                  height: 20,
-                                  borderRadius: AppRadius.sm,
-                                ),
-                                SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      SkeletonBox(
-                                        width: double.infinity,
-                                        height: 14,
-                                      ),
-                                      SizedBox(height: AppSpacing.xs),
-                                      SkeletonBox(width: 100, height: 12),
-                                    ],
-                                  ),
-                                ),
-                              ],
+                const SizedBox(height: AppSpacing.md),
+                const AppHairline(),
+                const SizedBox(height: AppSpacing.lg),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SkeletonBox(width: 180, height: 14),
+                    const SizedBox(height: AppSpacing.sm),
+                    for (var i = 0; i < 3; i++) ...[
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 10),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SkeletonBox(
+                              width: 20,
+                              height: 20,
+                              borderRadius: AppRadius.sm,
                             ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  SkeletonBox(
+                                    width: double.infinity,
+                                    height: 14,
+                                  ),
+                                  SizedBox(height: AppSpacing.xs),
+                                  SkeletonBox(width: 100, height: 12),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 88),
               ],

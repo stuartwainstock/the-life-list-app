@@ -3,8 +3,6 @@
 ## Active
 
 - [ ] **Splash: cream background in all modes** - simpler fix than debugging the dark-mode asset bug; drop the separate dark splash variant entirely and use `#FAF6EE` + the loon in both light and dark system mode — see `docs/tickets/web-splash-dark-mode-bugfix.md`
-- [ ] **Screen-level hairline-vs-card pass** - replace the remaining tinted/bordered card sections (species detail description block, sightings section) with hairline dividers now that `lib/theme/` tokens exist to build from — per `docs/brand.md`'s surface philosophy
-- [ ] **Species search** - search all 10,000+ eBird species by name, not just ones seen recently nearby; needs a new search screen/flow against the taxonomy data already cached locally via `EbirdTaxonomyService`
 
 ## Waiting On
 
@@ -16,6 +14,11 @@
 
 ## Done
 
+- [x] ~~Species photos: Commons gallery + hero attribution~~ (2026-07-21)
+- [x] ~~Hotspot detail: all-time species checklist on drag-up~~ (2026-07-21)
+- [x] ~~Species search: match common name only~~ (2026-07-21)
+- [x] ~~Species search (full taxonomy, AppBar entry on sightings list)~~ (2026-07-21)
+- [x] ~~Screen-level hairline-vs-card pass (species detail description + sightings)~~ (2026-07-21)
 - [x] ~~Standardize hotspot marker detail panel (persistent peek sheet above nav)~~ (2026-07-21)
 - [x] ~~Species detail: cap long sightings list + FAB clearance~~ (2026-07-21)
 - [x] ~~Offline caching (stale-while-revalidate for sightings + hotspots)~~ (2026-07-21)

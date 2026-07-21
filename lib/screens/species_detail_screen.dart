@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/observation.dart';
 import '../models/life_list_entry.dart';
 import '../services/ebird_service.dart';
@@ -7,6 +8,7 @@ import '../services/wikipedia_service.dart';
 import '../services/life_list_service.dart';
 import '../utils/relative_time.dart';
 import '../theme/app_spacing.dart';
+import '../widgets/app_hairline.dart';
 import '../widgets/skeleton.dart';
 import '../widgets/species_detail_skeleton.dart';
 
@@ -18,10 +20,9 @@ import '../widgets/species_detail_skeleton.dart';
 /// same-weight text; see `docs/tickets/species-detail-redesign.md`.
 ///
 /// ## Hero photo
-/// Collapsing [SliverAppBar] (Play Store / Spotify album pattern). If
-/// Wikipedia has no image we fall back to a normal [AppBar] — never leave
-/// a blank hero slab. Image uses `BoxFit.cover` in the flexible space;
-/// list thumbnails stay separate (contain/crop is a list concern).
+/// Collapsing [SliverAppBar] with optional Commons gallery (swipe + dots)
+/// and attribution caption — see
+/// `docs/tickets/species-photo-attribution-and-gallery.md`.
 ///
 /// ## Recent sightings
 /// Capped to [_SightingsSection.initialCap] with in-place "View all N"
@@ -68,10 +69,7 @@ class _SpeciesDetailScreenState extends State<SpeciesDetailScreen> {
   /// Bottom inset is added at build time for home-indicator devices.
   static const double _fabClearanceBase = 96;
 
-  bool get _hasPhoto {
-    final url = _summary?.heroImageUrl;
-    return url != null && url.isNotEmpty;
-  }
+  bool get _hasPhoto => _summary?.photos.isNotEmpty ?? false;
 
   @override
   void initState() {
@@ -189,7 +187,7 @@ class _SpeciesDetailScreenState extends State<SpeciesDetailScreen> {
             )
           : CustomScrollView(
               slivers: [
-                if (_hasPhoto) _HeroAppBar(imageUrl: _summary!.heroImageUrl!),
+                if (_hasPhoto) _HeroAppBar(photos: _summary!.photos),
                 SliverToBoxAdapter(child: _buildBody(context)),
               ],
             ),
@@ -235,31 +233,28 @@ class _SpeciesDetailScreenState extends State<SpeciesDetailScreen> {
             ),
           ],
 
-          // Description block — distinct surface
+          // Description — hairline separation, not a tinted card
+          // (`docs/brand.md` surface philosophy / hairline-vs-card-pass).
           if (_summary != null && _summary!.extract.isNotEmpty) ...[
-            const SizedBox(height: 20),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: scheme.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(AppRadius.md),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  _summary!.extract,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    height: 1.45,
-                    color: scheme.onSurface,
-                  ),
+            const SizedBox(height: AppSpacing.xl),
+            const AppHairline(),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+              child: Text(
+                _summary!.extract,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  height: 1.45,
+                  color: scheme.onSurface,
                 ),
               ),
             ),
           ],
 
-          const SizedBox(height: 28),
+          const SizedBox(height: AppSpacing.md),
+          const AppHairline(),
+          const SizedBox(height: AppSpacing.lg),
 
-          // Sightings feed — most "GoBird-like" part of this screen; gets
-          // its own tinted surface so it doesn't blend into the wiki blurb.
+          // Sightings feed — section eyebrow + list; no outer card fill.
           _SightingsSection(sightings: _sightings),
 
           // Keep last rows above the extended FAB (+ home indicator).
@@ -270,14 +265,42 @@ class _SpeciesDetailScreenState extends State<SpeciesDetailScreen> {
   }
 }
 
-class _HeroAppBar extends StatelessWidget {
-  final String imageUrl;
+class _HeroAppBar extends StatefulWidget {
+  final List<SpeciesPhoto> photos;
 
-  const _HeroAppBar({required this.imageUrl});
+  const _HeroAppBar({required this.photos});
+
+  @override
+  State<_HeroAppBar> createState() => _HeroAppBarState();
+}
+
+class _HeroAppBarState extends State<_HeroAppBar> {
+  late final PageController _pageController = PageController();
+  int _index = 0;
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  SpeciesPhoto get _current => widget.photos[_index.clamp(0, widget.photos.length - 1)];
+
+  Future<void> _openSource() async {
+    final raw = _current.sourcePageUrl;
+    if (raw == null || raw.isEmpty) return;
+    final uri = Uri.tryParse(raw);
+    if (uri == null) return;
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final photos = widget.photos;
+    final multi = photos.length > 1;
+    final attribution = _current.attributionText;
 
     return SliverAppBar(
       pinned: true,
@@ -293,41 +316,95 @@ class _HeroAppBar extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             ColoredBox(color: scheme.surfaceContainerHighest),
-            CachedNetworkImage(
-              imageUrl: imageUrl,
-              // cover is correct for a collapsing hero; the earlier
-              // fixed-height + cover combo cropped awkwardly — flexible
-              // space + scrim is the intended treatment now.
-              fit: BoxFit.cover,
-              alignment: Alignment.center,
-              placeholder: (_, __) => const Center(
-                child: BrandProgressIndicator(),
-              ),
-              errorWidget: (_, __, ___) => Center(
-                child: Icon(
-                  Icons.image_not_supported_outlined,
-                  size: 48,
-                  color: scheme.outline,
+            PageView.builder(
+              controller: _pageController,
+              itemCount: photos.length,
+              onPageChanged: (i) => setState(() => _index = i),
+              itemBuilder: (context, i) {
+                return CachedNetworkImage(
+                  imageUrl: photos[i].imageUrl,
+                  httpHeaders: WikipediaService.imageRequestHeaders,
+                  fit: BoxFit.cover,
+                  alignment: Alignment.center,
+                  placeholder: (_, __) => const Center(
+                    child: BrandProgressIndicator(),
+                  ),
+                  errorWidget: (_, __, ___) => Center(
+                    child: Icon(
+                      Icons.image_not_supported_outlined,
+                      size: 48,
+                      color: scheme.outline,
+                    ),
+                  ),
+                );
+              },
+            ),
+            // Must IgnorePointer — a full-bleed DecoratedBox above the
+            // PageView otherwise steals horizontal swipes.
+            const IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color(0x66000000),
+                      Colors.transparent,
+                      Colors.transparent,
+                      Color(0x99000000),
+                    ],
+                    stops: [0.0, 0.22, 0.5, 1.0],
+                  ),
                 ),
               ),
             ),
-            // Top scrim helps status-bar / leading area; bottom scrim keeps
-            // future overlays readable on light plumage.
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Color(0x66000000),
-                    Colors.transparent,
-                    Colors.transparent,
-                    Color(0x66000000),
+            if (attribution != null && attribution.isNotEmpty)
+              Positioned(
+                left: AppSpacing.lg,
+                right: AppSpacing.lg,
+                bottom: multi ? 28 : AppSpacing.md,
+                child: GestureDetector(
+                  onTap: _current.sourcePageUrl != null ? _openSource : null,
+                  child: Text(
+                    attribution,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: Colors.white.withValues(alpha: 0.92),
+                      height: 1.25,
+                      shadows: const [
+                        Shadow(
+                          blurRadius: 6,
+                          color: Color(0x88000000),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            if (multi)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: AppSpacing.sm,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    for (var i = 0; i < photos.length; i++)
+                      Container(
+                        width: 6,
+                        height: 6,
+                        margin: const EdgeInsets.symmetric(horizontal: 3),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: i == _index
+                              ? Colors.white
+                              : Colors.white.withValues(alpha: 0.4),
+                        ),
+                      ),
                   ],
-                  stops: [0.0, 0.22, 0.55, 1.0],
                 ),
               ),
-            ),
           ],
         ),
       ),
@@ -386,106 +463,96 @@ class _SightingsSectionState extends State<_SightingsSection> {
         : sightings;
     final bands = _groupByRecency(visible);
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(AppRadius.md),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           children: [
-            Row(
-              children: [
-                Text(
-                  'Recent sightings near you',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: accent,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: accent.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(AppRadius.pill),
-                  ),
-                  child: Text(
-                    '$total',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: accent,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
+            Text(
+              'Recent sightings near you',
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: accent,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.2,
+              ),
             ),
-            const SizedBox(height: 8),
-            if (sightings.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Text(
-                  'No recent nearby sightings of this species.',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+              ),
+              child: Text(
+                '$total',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: accent,
+                  fontWeight: FontWeight.w700,
                 ),
-              )
-            else ...[
-              for (final band in bands) ...[
-                if (bands.length > 1)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8, bottom: 4),
-                    child: Text(
-                      band.label,
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ...band.items.map((s) => _SightingRow(observation: s)),
-              ],
-              if (capped)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4, bottom: 4),
-                  child: TextButton(
-                    onPressed: () => setState(() => _expanded = true),
-                    style: TextButton.styleFrom(
-                      foregroundColor: accent,
-                      textStyle: theme.textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                      padding: EdgeInsets.zero,
-                      minimumSize: const Size(0, 40),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: Text('View all $total sightings'),
-                  ),
-                ),
-              if (_expanded && total > _SightingsSection.initialCap)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4, bottom: 4),
-                  child: TextButton(
-                    onPressed: () => setState(() => _expanded = false),
-                    style: TextButton.styleFrom(
-                      foregroundColor: scheme.onSurfaceVariant,
-                      textStyle: theme.textTheme.labelLarge,
-                      padding: EdgeInsets.zero,
-                      minimumSize: const Size(0, 40),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: const Text('Show less'),
-                  ),
-                ),
-            ],
+              ),
+            ),
           ],
         ),
-      ),
+        const SizedBox(height: 8),
+        if (sightings.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Text(
+              'No recent nearby sightings of this species.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          )
+        else ...[
+          for (final band in bands) ...[
+            if (bands.length > 1)
+              Padding(
+                padding: const EdgeInsets.only(top: 8, bottom: 4),
+                child: Text(
+                  band.label,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ...band.items.map((s) => _SightingRow(observation: s)),
+          ],
+          if (capped)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 4),
+              child: TextButton(
+                onPressed: () => setState(() => _expanded = true),
+                style: TextButton.styleFrom(
+                  foregroundColor: accent,
+                  textStyle: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 40),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: Text('View all $total sightings'),
+              ),
+            ),
+          if (_expanded && total > _SightingsSection.initialCap)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 4),
+              child: TextButton(
+                onPressed: () => setState(() => _expanded = false),
+                style: TextButton.styleFrom(
+                  foregroundColor: scheme.onSurfaceVariant,
+                  textStyle: theme.textTheme.labelLarge,
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 40),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text('Show less'),
+              ),
+            ),
+        ],
+      ],
     );
   }
 

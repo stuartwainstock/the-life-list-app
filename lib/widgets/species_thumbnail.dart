@@ -4,6 +4,10 @@ import '../services/wikipedia_service.dart';
 
 /// Lazy-loaded Wikipedia thumbnail for a species.
 ///
+/// Uses the lightweight Wikipedia lead-image path (not the Commons gallery).
+/// Attribution is shown on the detail hero only — thumbs are too small for
+/// credit text (`docs/tickets/species-photo-attribution-and-gallery.md`).
+///
 /// Shared [WikipediaService] session cache means scrolling / revisiting
 /// the same bird doesn't re-hit the network.
 ///
@@ -77,6 +81,7 @@ class _SpeciesThumbnailState extends State<SpeciesThumbnail> {
             borderRadius: radius,
             child: CachedNetworkImage(
               imageUrl: url,
+              httpHeaders: WikipediaService.imageRequestHeaders,
               width: size,
               height: size,
               fit: BoxFit.cover,

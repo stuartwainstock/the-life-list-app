@@ -129,6 +129,20 @@ class EbirdService {
     return list.map((e) => Hotspot.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  /// All-time species codes recorded at a hotspot / location.
+  ///
+  /// `GET /product/spplist/{locId}` — codes only; resolve names via
+  /// [EbirdTaxonomyService] (`docs/tickets/hotspot-species-list.md`).
+  Future<List<String>> hotspotSpeciesList({required String locId}) async {
+    final uri = Uri.parse('$_baseUrl/product/spplist/$locId').replace(
+      queryParameters: {'fmt': 'json'},
+    );
+    final res = await http.get(uri, headers: _headers);
+    _checkStatus(res);
+    final list = jsonDecode(res.body) as List;
+    return list.map((e) => e.toString()).toList();
+  }
+
   void _checkStatus(http.Response res) {
     if (res.statusCode == 401 || res.statusCode == 403) {
       throw EbirdApiException(
