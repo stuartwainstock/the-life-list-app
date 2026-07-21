@@ -27,11 +27,18 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            // TODO: Replace with a real release signingConfig before uploading
+            // to Play (blocker for store submission — see README "Release
+            // builds"). Debug keys keep `flutter run --release` working.
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
+    // ABI splits for sideloaded APKs: prefer Flutter's CLI flag rather than
+    // a gradle `splits { abi { ... } }` block —
+    //   flutter build apk --release --split-per-abi
+    // Play Store releases use an App Bundle instead (`flutter build
+    // appbundle --release`); Play does per-device splitting server-side.
 }
 
 kotlin {

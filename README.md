@@ -91,14 +91,38 @@ transfer, not "charging only" — that trips up ADB more often than you'd
 expect), or start an emulator from Android Studio, then run the command
 above.
 
-### 4. Build a real APK to install anytime
+### 4. Release builds (APK vs App Bundle)
+
+**Play Store** — ship an Android App Bundle. Play generates the
+per-device APK (ABI / density / language) at download time:
 
 ```
-flutter build apk --release
+flutter build appbundle --release
 ```
 
-Lands at `build/app/outputs/flutter-apk/app-release.apk` — copy to your
-phone (or `flutter install`) to use without a cable.
+Output: `build/app/outputs/bundle/release/app-release.aab`.
+
+Before any real Play upload, replace the debug `signingConfig` in
+`android/app/build.gradle.kts` with a proper release keystore — the
+current TODO there is a hard blocker for store submission.
+
+**Direct / sideloaded APK** (USB install, sharing a build outside Play)
+— use ABI splitting so you don't ship a fat universal APK that bundles
+every architecture:
+
+```
+flutter build apk --release --split-per-abi
+```
+
+That produces per-ABI APKs under `build/app/outputs/flutter-apk/`
+(e.g. `app-armeabi-v7a-release.apk`, `app-arm64-v8a-release.apk`). We
+use Flutter's `--split-per-abi` flag rather than a manual Gradle
+`splits { abi { ... } }` block so the split stays in the Flutter
+toolchain and matches what `flutter build` already documents.
+
+A plain `flutter build apk --release` (no split) still builds a
+universal APK — avoid that for day-to-day testing installs; it's the
+main reason an install can land at ~100MB+.
 
 ### 5. Faster iteration: run it in the browser (localhost)
 
@@ -182,6 +206,8 @@ Implemented:
 - Offline-friendly loading — last-known sightings/hotspots results are
   cached and shown instantly while a fresh fetch happens quietly in the
   background, with skeleton loading states instead of bare spinners
+- Bounded on-device caches for map tiles (~50 MB) and species photos
+  (~100 images / 21 days) so footprint doesn't grow without limit
 - Native launch splash (Android `SplashScreen` API via
   `flutter_native_splash`) and adaptive launcher icon — Common Loon
   brand mark on cream in both light and dark system modes (app UI dark

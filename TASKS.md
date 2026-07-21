@@ -5,6 +5,7 @@
 ## Waiting On
 
 ## Someday
+- [ ] **Play Store readiness checklist** - real release signing key (currently debug-signed, see TODO in `android/app/build.gradle.kts`), a privacy policy (required once requesting location + storing an API key), store listing assets (screenshots, feature graphic, descriptions), and the Play Console content rating questionnaire — revisit once actually ready to submit
 - [ ] **Bird call audio** - Xeno-canto has a free public API (https://xeno-canto.org/explore/api), could slot in next to the Wikipedia photo on the species page
 - [ ] **Life list Phase 2: export to eBird** - package logged sightings into eBird's checklist-format CSV, hand off to eBird's own import page
 - [ ] **Life list Phase 3: deep-link hand-off** - share/deep-link into eBird's own app to submit a live checklist, pre-filled with as much context as possible
@@ -12,6 +13,7 @@
 
 ## Done
 
+- [x] ~~App footprint: build format + cache limits~~ (2026-07-21)
 - [x] ~~Splash: cream background in all modes (no separate dark variant)~~ (2026-07-20)
 - [x] ~~Accessibility: quick wins~~ (2026-07-21)
 - [x] ~~Accessibility: verification pass~~ (2026-07-21)

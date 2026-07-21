@@ -6,6 +6,7 @@ import '../models/life_list_entry.dart';
 import '../services/ebird_service.dart';
 import '../services/wikipedia_service.dart';
 import '../services/life_list_service.dart';
+import '../services/species_image_cache.dart';
 import '../utils/relative_time.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_theme.dart';
@@ -339,6 +340,7 @@ class _HeroAppBarState extends State<_HeroAppBar> {
                   child: CachedNetworkImage(
                     imageUrl: photos[i].imageUrl,
                     httpHeaders: WikipediaService.imageRequestHeaders,
+                    cacheManager: SpeciesImageCache.instance,
                     fit: BoxFit.cover,
                     alignment: Alignment.center,
                     placeholder: (_, __) => const Center(

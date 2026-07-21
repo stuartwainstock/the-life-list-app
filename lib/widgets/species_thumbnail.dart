@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import '../services/species_image_cache.dart';
 import '../services/wikipedia_service.dart';
 
 /// Lazy-loaded Wikipedia thumbnail for a species.
@@ -85,6 +86,7 @@ class _SpeciesThumbnailState extends State<SpeciesThumbnail> {
               child: CachedNetworkImage(
                 imageUrl: url,
                 httpHeaders: WikipediaService.imageRequestHeaders,
+                cacheManager: SpeciesImageCache.instance,
                 width: size,
                 height: size,
                 fit: BoxFit.cover,

@@ -207,6 +207,12 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
             TileLayer(
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               userAgentPackageName: 'com.thelifelist.app',
+              // Explicit provider so the bounded BuiltInMapCachingProvider
+              // from [MapTileCache.ensureConfigured] is the one in use.
+              tileProvider: NetworkTileProvider(
+                cachingProvider:
+                    BuiltInMapCachingProvider.getOrCreateInstance(),
+              ),
             ),
             MarkerLayer(
               markers: [

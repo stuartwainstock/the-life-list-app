@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'screens/home_shell.dart';
+import 'services/map_tile_cache.dart';
 import 'services/settings_service.dart';
 import 'theme/app_theme.dart';
 
@@ -30,6 +31,9 @@ import 'theme/app_theme.dart';
 /// SplashScreen API + web). It dismisses on first Flutter frame — do not
 /// add artificial delays here. See `docs/tickets/splash-screen-skeleton.md`.
 void main() {
+  // Cap flutter_map's built-in tile disk cache before any TileLayer can
+  // create the 1 GB default instance.
+  MapTileCache.ensureConfigured();
   runApp(const TheLifeListApp());
 }
 
