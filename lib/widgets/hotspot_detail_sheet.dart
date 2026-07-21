@@ -159,16 +159,26 @@ class _HotspotDetailSheetState extends State<HotspotDetailSheet> {
               ),
               children: [
                 Center(
-                  child: Container(
-                    width: 32,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: AppSpacing.md),
-                    decoration: BoxDecoration(
-                      color: scheme.outlineVariant,
-                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                  child: Semantics(
+                    label: 'Drag handle',
+                    hint: 'Drag up for full checklist',
+                    child: SizedBox(
+                      width: 48,
+                      height: 44,
+                      child: Center(
+                        child: Container(
+                          width: 32,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: scheme.outlineVariant,
+                            borderRadius: BorderRadius.circular(AppRadius.pill),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
+                const SizedBox(height: AppSpacing.md),
                 Text(
                   widget.hotspot.locName,
                   style: theme.textTheme.titleLarge,

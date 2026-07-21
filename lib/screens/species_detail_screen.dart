@@ -8,6 +8,7 @@ import '../services/wikipedia_service.dart';
 import '../services/life_list_service.dart';
 import '../utils/relative_time.dart';
 import '../theme/app_spacing.dart';
+import '../theme/app_theme.dart';
 import '../widgets/app_hairline.dart';
 import '../widgets/skeleton.dart';
 import '../widgets/species_detail_skeleton.dart';
@@ -178,7 +179,10 @@ class _SpeciesDetailScreenState extends State<SpeciesDetailScreen> {
               title: Text(
                 widget.comName,
                 style: Theme.of(context).textTheme.titleMedium,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
+              toolbarHeight: AppTheme.toolbarHeightOf(context),
             ),
       body: _loading
           ? SpeciesDetailSkeleton(
@@ -187,7 +191,11 @@ class _SpeciesDetailScreenState extends State<SpeciesDetailScreen> {
             )
           : CustomScrollView(
               slivers: [
-                if (_hasPhoto) _HeroAppBar(photos: _summary!.photos),
+                if (_hasPhoto)
+                  _HeroAppBar(
+                    photos: _summary!.photos,
+                    comName: widget.comName,
+                  ),
                 SliverToBoxAdapter(child: _buildBody(context)),
               ],
             ),
@@ -267,8 +275,12 @@ class _SpeciesDetailScreenState extends State<SpeciesDetailScreen> {
 
 class _HeroAppBar extends StatefulWidget {
   final List<SpeciesPhoto> photos;
+  final String comName;
 
-  const _HeroAppBar({required this.photos});
+  const _HeroAppBar({
+    required this.photos,
+    required this.comName,
+  });
 
   @override
   State<_HeroAppBar> createState() => _HeroAppBarState();
@@ -321,19 +333,23 @@ class _HeroAppBarState extends State<_HeroAppBar> {
               itemCount: photos.length,
               onPageChanged: (i) => setState(() => _index = i),
               itemBuilder: (context, i) {
-                return CachedNetworkImage(
-                  imageUrl: photos[i].imageUrl,
-                  httpHeaders: WikipediaService.imageRequestHeaders,
-                  fit: BoxFit.cover,
-                  alignment: Alignment.center,
-                  placeholder: (_, __) => const Center(
-                    child: BrandProgressIndicator(),
-                  ),
-                  errorWidget: (_, __, ___) => Center(
-                    child: Icon(
-                      Icons.image_not_supported_outlined,
-                      size: 48,
-                      color: scheme.outline,
+                return Semantics(
+                  image: true,
+                  label: 'Photo of a ${widget.comName}',
+                  child: CachedNetworkImage(
+                    imageUrl: photos[i].imageUrl,
+                    httpHeaders: WikipediaService.imageRequestHeaders,
+                    fit: BoxFit.cover,
+                    alignment: Alignment.center,
+                    placeholder: (_, __) => const Center(
+                      child: BrandProgressIndicator(),
+                    ),
+                    errorWidget: (_, __, ___) => Center(
+                      child: Icon(
+                        Icons.image_not_supported_outlined,
+                        size: 48,
+                        color: scheme.outline,
+                      ),
                     ),
                   ),
                 );
@@ -391,9 +407,10 @@ class _HeroAppBarState extends State<_HeroAppBar> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     for (var i = 0; i < photos.length; i++)
+                      // Active page is larger — not opacity/color alone.
                       Container(
-                        width: 6,
-                        height: 6,
+                        width: i == _index ? 8 : 6,
+                        height: i == _index ? 8 : 6,
                         margin: const EdgeInsets.symmetric(horizontal: 3),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,

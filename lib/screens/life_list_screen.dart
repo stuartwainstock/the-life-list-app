@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/life_list_entry.dart';
 import '../services/life_list_service.dart';
+import '../theme/app_theme.dart';
 import '../widgets/species_thumbnail.dart';
 
 /// The user's personal life list — every species they've marked as seen,
@@ -63,8 +64,13 @@ class _LifeListScreenState extends State<LifeListScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Life List'),
+        toolbarHeight: AppTheme.toolbarHeightOf(context),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh life list',
+            onPressed: _load,
+          ),
         ],
       ),
       body: _loading
@@ -109,6 +115,7 @@ class _LifeListScreenState extends State<LifeListScreen> {
                         isThreeLine: true,
                         trailing: IconButton(
                           icon: const Icon(Icons.delete_outline),
+                          tooltip: 'Remove ${e.comName}',
                           onPressed: () => _confirmRemove(e),
                         ),
                       );

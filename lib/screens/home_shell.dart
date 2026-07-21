@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/settings_service.dart';
+import '../theme/app_theme.dart';
 import 'sightings_list_screen.dart';
 import 'hotspots_map_screen.dart';
 import 'life_list_screen.dart';
@@ -68,7 +69,10 @@ class _HomeShellState extends State<HomeShell> {
     // of 401s on every tab.
     if (_apiKey == null || _apiKey!.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Welcome to The Life List')),
+        appBar: AppBar(
+          title: const Text('Welcome to The Life List'),
+          toolbarHeight: AppTheme.toolbarHeightOf(context),
+        ),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),

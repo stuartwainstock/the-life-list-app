@@ -77,18 +77,22 @@ class _SpeciesThumbnailState extends State<SpeciesThumbnail> {
           if (url == null || url.isEmpty) {
             return _Placeholder(size: size, radius: radius, loading: false);
           }
-          return ClipRRect(
-            borderRadius: radius,
-            child: CachedNetworkImage(
-              imageUrl: url,
-              httpHeaders: WikipediaService.imageRequestHeaders,
-              width: size,
-              height: size,
-              fit: BoxFit.cover,
-              placeholder: (_, __) =>
-                  _Placeholder(size: size, radius: radius, loading: true),
-              errorWidget: (_, __, ___) =>
-                  _Placeholder(size: size, radius: radius, loading: false),
+          return Semantics(
+            image: true,
+            label: 'Photo of a ${widget.comName}',
+            child: ClipRRect(
+              borderRadius: radius,
+              child: CachedNetworkImage(
+                imageUrl: url,
+                httpHeaders: WikipediaService.imageRequestHeaders,
+                width: size,
+                height: size,
+                fit: BoxFit.cover,
+                placeholder: (_, __) =>
+                    _Placeholder(size: size, radius: radius, loading: true),
+                errorWidget: (_, __, ___) =>
+                    _Placeholder(size: size, radius: radius, loading: false),
+              ),
             ),
           );
         },

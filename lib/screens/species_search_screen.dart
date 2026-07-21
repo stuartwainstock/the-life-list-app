@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/ebird_taxonomy_service.dart';
 import '../services/location_service.dart';
 import '../theme/app_spacing.dart';
+import '../theme/app_theme.dart';
 import '../widgets/skeleton.dart';
 import 'species_detail_screen.dart';
 
@@ -161,6 +162,7 @@ class _SpeciesSearchScreenState extends State<SpeciesSearchScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        toolbarHeight: AppTheme.toolbarHeightOf(context),
         title: TextField(
           controller: _controller,
           focusNode: _focusNode,

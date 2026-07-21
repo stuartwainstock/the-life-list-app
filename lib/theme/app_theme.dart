@@ -10,6 +10,13 @@ import 'app_typography.dart';
 /// paper/ink palette from `docs/brand.md` rather than a generated Material
 /// tonal palette from a single green.
 abstract final class AppTheme {
+  /// AppBar height that grows modestly with system text scale so multi-line
+  /// titles aren't clipped (accessibility verification pass).
+  static double toolbarHeightOf(BuildContext context) {
+    final scaled = MediaQuery.textScalerOf(context).scale(kToolbarHeight);
+    return scaled.clamp(kToolbarHeight, 88.0);
+  }
+
   static ThemeData get light => _build(
         brightness: Brightness.light,
         background: AppColors.lightBackground,
@@ -132,7 +139,9 @@ abstract final class AppTheme {
         backgroundColor: surface,
         selectedColor: accentTint,
         labelStyle: textTheme.labelLarge,
-        side: BorderSide(color: hairline),
+        // Interactive chip edge — muted ink (~text secondary), not the
+        // decorative hairline (~1.3:1). WCAG 1.4.11 non-text contrast.
+        side: BorderSide(color: mutedInk),
       ),
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: ButtonStyle(
@@ -145,8 +154,10 @@ abstract final class AppTheme {
             if (states.contains(WidgetState.selected)) return accent;
             return mutedInk;
           }),
+          // Control outline uses outline (muted ink), not hairline — the
+          // hairline token stays for decorative dividers only.
           side: WidgetStatePropertyAll(
-            BorderSide(color: hairline, width: AppStroke.hairline),
+            BorderSide(color: mutedInk, width: AppStroke.hairline),
           ),
         ),
       ),

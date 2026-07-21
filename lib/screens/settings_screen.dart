@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/settings_service.dart';
 import '../theme/app_spacing.dart';
+import '../theme/app_theme.dart';
 
 class SettingsScreen extends StatefulWidget {
   final VoidCallback onApiKeySaved;
@@ -43,7 +44,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(
+        title: const Text('Settings'),
+        toolbarHeight: AppTheme.toolbarHeightOf(context),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.lg),
         children: [
@@ -74,7 +78,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onSelectionChanged: (selected) {
                 widget.onThemeModeChanged(selected.first);
               },
-              showSelectedIcon: false,
+              // Checkmark + fill/icon — selection is not color-only.
             ),
           ),
           const SizedBox(height: AppSpacing.sm),

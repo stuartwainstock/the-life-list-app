@@ -8,6 +8,7 @@ import '../services/ebird_taxonomy_service.dart';
 import '../services/location_service.dart';
 import '../services/settings_service.dart';
 import '../theme/app_spacing.dart';
+import '../theme/app_theme.dart';
 import '../utils/relative_time.dart';
 import '../widgets/sighting_list_row.dart';
 import '../widgets/skeleton_sighting_row.dart';
@@ -395,6 +396,7 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Nearby Sightings'),
+        toolbarHeight: AppTheme.toolbarHeightOf(context),
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
@@ -408,6 +410,7 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh sightings',
             onPressed: _loading ? null : () => _load(keepContent: true),
           ),
         ],
@@ -424,18 +427,28 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
                 segments: const [
                   ButtonSegment<bool>(
                     value: false,
-                    label: Text('All species'),
+                    label: Text(
+                      'All species',
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   ButtonSegment<bool>(
                     value: true,
-                    label: Text('Notable / rare'),
+                    label: Text(
+                      'Notable / rare',
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ],
                 selected: {_showNotableOnly},
                 onSelectionChanged: (selected) {
                   setState(() => _showNotableOnly = selected.first);
                 },
-                showSelectedIcon: false,
+                // Checkmark + fill — selection is not color-only (WCAG 1.4.1).
               ),
             ),
           ),
@@ -458,7 +471,11 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline, size: 40),
+              Icon(
+                Icons.error_outline,
+                size: 40,
+                color: Theme.of(context).colorScheme.error,
+              ),
               const SizedBox(height: 12),
               Text(_error!, textAlign: TextAlign.center),
               const SizedBox(height: 12),

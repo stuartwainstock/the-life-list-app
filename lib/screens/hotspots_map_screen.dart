@@ -6,6 +6,7 @@ import '../services/ebird_list_cache.dart';
 import '../services/ebird_service.dart';
 import '../services/location_service.dart';
 import '../theme/app_spacing.dart';
+import '../theme/app_theme.dart';
 import '../utils/relative_time.dart';
 import '../widgets/hotspot_detail_sheet.dart';
 import '../widgets/skeleton.dart';
@@ -147,9 +148,11 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Nearby Hotspots'),
+        toolbarHeight: AppTheme.toolbarHeightOf(context),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh hotspots',
             onPressed: _loading ? null : _load,
           ),
         ],
@@ -167,7 +170,11 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline, size: 40),
+              Icon(
+                Icons.error_outline,
+                size: 40,
+                color: Theme.of(context).colorScheme.error,
+              ),
               const SizedBox(height: 12),
               Text(_error!, textAlign: TextAlign.center),
               const SizedBox(height: 12),
@@ -210,21 +217,35 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
                   child: const Icon(Icons.my_location, color: Colors.blue),
                 ),
                 ..._hotspots.map(
-                  (h) => Marker(
-                    point: LatLng(h.lat, h.lng),
-                    width: 36,
-                    height: 36,
-                    child: GestureDetector(
-                      onTap: () => setState(() => _selected = h),
-                      child: Icon(
-                        Icons.location_on,
-                        color: _selected?.locId == h.locId
-                            ? Theme.of(context).colorScheme.primary
-                            : Colors.redAccent,
-                        size: 32,
+                  (h) {
+                    final selected = _selected?.locId == h.locId;
+                    final scheme = Theme.of(context).colorScheme;
+                    // Selection uses size + filled vs outlined icon — not
+                    // color alone (WCAG 1.4.1). Hit area stays ≥48dp.
+                    return Marker(
+                      point: LatLng(h.lat, h.lng),
+                      width: 48,
+                      height: 48,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => setState(() => _selected = h),
+                        child: Center(
+                          child: Icon(
+                            selected
+                                ? Icons.location_on
+                                : Icons.location_on_outlined,
+                            color: selected
+                                ? scheme.primary
+                                : scheme.error,
+                            size: selected ? 36 : 28,
+                            semanticLabel: selected
+                                ? 'Selected hotspot ${h.locName}'
+                                : 'Hotspot ${h.locName}',
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
               ],
             ),
@@ -268,6 +289,11 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
                 padding: const EdgeInsets.all(12),
                 child: Row(
                   children: [
+                    Icon(
+                      Icons.error_outline,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                    const SizedBox(width: 8),
                     Expanded(child: Text(_error!, maxLines: 2)),
                     TextButton(onPressed: _load, child: const Text('Retry')),
                   ],
