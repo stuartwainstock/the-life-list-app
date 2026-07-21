@@ -2,10 +2,6 @@
 
 ## Active
 
-- [ ] **Splash: cream background in all modes** - simpler fix than debugging the dark-mode asset bug; drop the separate dark splash variant entirely and use `#FAF6EE` + the loon in both light and dark system mode — see `docs/tickets/web-splash-dark-mode-bugfix.md`
-- [x] **Accessibility: quick wins** - missing icon-button tooltips, species photo alt text, touch target sizing on map markers/drag handle — see `docs/tickets/accessibility-quick-wins.md`
-- [x] **Accessibility: verification pass** - confirm hairline dividers never serve as sole interactive-boundary indicator, dynamic text scaling holds up, no state relies on color alone — see `docs/tickets/accessibility-verification-pass.md`
-
 ## Waiting On
 
 ## Someday
@@ -16,6 +12,9 @@
 
 ## Done
 
+- [x] ~~Splash: cream background in all modes (no separate dark variant)~~ (2026-07-20)
+- [x] ~~Accessibility: quick wins~~ (2026-07-21)
+- [x] ~~Accessibility: verification pass~~ (2026-07-21)
 - [x] ~~Species photos: Commons gallery + hero attribution~~ (2026-07-21)
 - [x] ~~Hotspot detail: all-time species checklist on drag-up~~ (2026-07-21)
 - [x] ~~Species search: match common name only~~ (2026-07-21)

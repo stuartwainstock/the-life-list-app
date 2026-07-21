@@ -1,34 +1,51 @@
 # The Life List
 
-A simple, editorial-minimalist birding app for Android (and web, for
-dev/testing), built on Flutter and the free public eBird API. Originally
-inspired by GoBird, it's grown its own identity: nearby sightings grouped
-by taxonomic family, hotspots, species detail pages, and a personal life
-list — all read-only against eBird today, with a real path toward eBird
-interoperability (see the roadmap below).
+A birding app for the walk, not just the spreadsheet. Built on Flutter
+and the free public eBird API, for Android (and web, for dev/testing).
+
+It started from a simple instinct: open the app, see what's around you,
+right now. The Life List grew its own identity from there: sightings
+grouped the way birders actually think about birds (by family, not
+alphabet), a species search that reaches beyond what's nearby, hotspots
+with their full all-time checklists, real photo attribution instead of
+borrowed images with no credit, and a personal life list that's been
+designed from day one to eventually talk to eBird's own systems instead
+of living in its own silo forever.
+
+Everything here is read-only against eBird for now. The roadmap section
+below covers what "eventually talk to eBird" actually means and why it's
+not further along yet (short version: eBird's write access isn't
+self-serve — see Phase 4).
 
 ## What's here
 
 - `lib/main.dart` — app entry point, theme wiring, manual + system
   dark-mode handling
-- `lib/screens/` — Sightings list (family-grouped, sticky headers),
-  Hotspots map, Species detail, Life List, Settings
-- `lib/services/` — eBird API client, eBird taxonomy client (for family
-  grouping), device location, local storage, Wikipedia photo lookup,
+- `lib/screens/` — Sightings list (family-grouped, sticky headers,
+  adjustable search radius), Hotspots map (persistent marker detail
+  sheet with full species checklist), Species search, Species detail
+  (photo gallery + attribution, capped sightings feed), Life List,
+  Settings
+- `lib/services/` — eBird API client, eBird taxonomy client (family
+  grouping + species search index), device location, local storage,
+  species photo/media lookup (Wikimedia Commons, with attribution),
   life list storage
 - `lib/models/` — Observation, Hotspot, and LifeListEntry data classes
 - `lib/theme/` — design tokens (colors, typography, spacing/radius) and
   the assembled light/dark `ThemeData` — see `docs/brand.md` for the
   source values
 - `lib/widgets/` — shared UI pieces (sighting list row, species
-  thumbnail) used across screens
+  thumbnail, hotspot detail sheet, loading skeletons) used across
+  screens
 - `lib/utils/` — small helpers (relative time formatting)
 - `docs/design-principles.md` — living reference for interaction
   patterns (prefer native Material 3 components, mirror established
   consumer-app patterns, minimize cognitive load)
 - `docs/brand.md` — living reference for color palette and typography
 - `docs/tickets/` — scoped work handed off for implementation; useful
-  history of *why* something looks the way it does
+  history of *why* something looks the way it does. Shipped tickets move
+  to `docs/tickets/done/` once they've landed, so the top level only
+  shows what's actually in flight.
 - `tools/cors_proxy.js` — local dev-only proxy for web testing (see
   below)
 - `flutter_native_splash.yaml` — native launch splash config
@@ -58,8 +75,7 @@ https://ebird.org/api/keygen
 
 Paste it into the app itself on first launch (Settings) — no code
 changes needed. Each contributor should use their own key rather than
-sharing one — see the earlier discussion in this repo's history if that
-tradeoff needs re-explaining to someone new.
+sharing one.
 
 ### 3. Install packages and run
 
@@ -70,8 +86,10 @@ flutter run
 
 Plug in your Android phone via USB with USB debugging enabled (Settings →
 About phone → tap "Build number" 7 times → Developer options → USB
-debugging), or start an emulator from Android Studio, then run the
-command above.
+debugging, and make sure the USB connection mode is set to file
+transfer, not "charging only" — that trips up ADB more often than you'd
+expect), or start an emulator from Android Studio, then run the command
+above.
 
 ### 4. Build a real APK to install anytime
 
@@ -119,12 +137,19 @@ reasoning each time:
   patterns from established consumer apps over inventing new
   interactions — see `design-principles.md` for the specific patterns
   already in use (segmented filter control, collapsing hero header,
-  sticky family-grouped headers, native launch splash).
+  sticky family-grouped headers, persistent bottom sheets, native launch
+  splash).
 - Visual direction is minimalist/editorial — warm cream/ink palette, a
   serif (Newsreader) for anything you read paired with a sans (Public
   Sans) for interface chrome, hairline dividers preferred over
   tinted/bordered cards. See `brand.md` for the full palette and type
   scale, and `lib/theme/` for how it's implemented as code tokens.
+- Accessibility isn't a separate pass bolted on at the end — the palette
+  was checked against WCAG AA contrast minimums as part of building it
+  (every core text/background pairing clears 4.5:1 in both light and
+  dark mode), and a follow-up audit covered screen-reader labels, touch
+  target sizing, dynamic text scaling, and making sure nothing relies on
+  color alone to convey meaning.
 - `docs/tickets/` holds scoped, standalone specs for work handed off for
   implementation — useful both as a handoff format and as a record of
   why a given screen looks the way it does.
@@ -133,12 +158,19 @@ reasoning each time:
 
 Implemented:
 - Nearby recent sightings, grouped by taxonomic family with sticky
-  section headers in eBird taxonomic order (not alphabetical), plus an
-  all-species/notable-rare segmented filter
-- Nearby hotspots map (OpenStreetMap, no Google Maps key needed)
-- Species detail page — collapsing hero photo, serif/sans typographic
-  hierarchy, photo/summary via Wikipedia, recent local sightings of that
-  species
+  section headers in eBird taxonomic order (not alphabetical), an
+  all-species/notable-rare segmented filter, and an adjustable search
+  radius (1–20 km, defaults to a tight 7 km so you start close and
+  expand outward)
+- Species search across the full eBird taxonomy (10,000+ species by
+  common name) — not limited to what's shown up nearby recently
+- Nearby hotspots map (OpenStreetMap, no Google Maps key needed), with a
+  persistent bottom sheet per marker that expands to show that
+  location's full all-time species checklist
+- Species detail page — collapsing hero photo (swipeable gallery with
+  photographer attribution when Wikimedia Commons has more than one
+  image for a species), serif/sans typographic hierarchy, Wikipedia
+  summary, and a capped/expandable feed of recent local sightings
 - **My Life List** — mark any species as seen (count, location, date)
   from its detail page; view/remove entries in the Life List tab. Stored
   locally on-device only — nothing is sent to eBird yet (see roadmap
@@ -146,10 +178,14 @@ Implemented:
 - Local eBird API key storage, no account/login required
 - Design tokens (`lib/theme/`) implementing `brand.md`'s palette and
   type scale, with real light/dark support (system-following by default,
-  manual override available)
+  manual override available), and an accessibility pass on top of it
+- Offline-friendly loading — last-known sightings/hotspots results are
+  cached and shown instantly while a fresh fetch happens quietly in the
+  background, with skeleton loading states instead of bare spinners
 - Native launch splash (Android `SplashScreen` API via
   `flutter_native_splash`) and adaptive launcher icon — Common Loon
-  brand mark on cream / dark brand backgrounds
+  brand mark on cream in both light and dark system modes (app UI dark
+  theme is unchanged)
 
 ### The life list roadmap
 
@@ -170,19 +206,11 @@ rewrite:
   access is a relationship you'd build directly with the eBird/Cornell
   Lab team, not something granted through the API keygen page.
 
-### Reasonable next steps, roughly in order of effort
+### Someday / backlog
 
-1. **Screen-level hairline-vs-card pass** — `brand.md`'s surface
-   philosophy calls for replacing the remaining tinted/bordered card
-   sections (detail page description block, sightings section) with
-   hairline dividers now that tokens exist to build from.
-2. **Species search** — search all 10,000+ eBird species by name, not
-   just ones seen recently nearby.
-3. **Offline caching** — cache last results so the list isn't empty with
-   no signal.
-4. **Bird call audio** — Xeno-canto has a free public API
-   (https://xeno-canto.org/explore/api) that could slot in next to the
-   Wikipedia photo on the species page.
+- **Bird call audio** — Xeno-canto has a free public API
+  (https://xeno-canto.org/explore/api) that could slot in next to the
+  photo on the species page.
 
 ## eBird API reference
 
