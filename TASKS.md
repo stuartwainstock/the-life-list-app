@@ -15,6 +15,7 @@
 
 ## Done
 
+- [x] ~~Hotspot sheet polish~~ (2026-07-22)
 - [x] ~~Hotspots map: AppBar parity with sightings~~ (2026-07-22)
 - [x] ~~Settings: units toggle + About skeleton~~ (2026-07-22)
 - [x] ~~Hotspot checklist: scope to shared date range~~ (2026-07-22)

@@ -55,6 +55,9 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
   LatLng? _center;
   Hotspot? _selected;
 
+  /// Sheet height as a fraction of the map body — drives the recenter FAB.
+  final _sheetExtent = ValueNotifier<double>(HotspotDetailSheet.peekSize);
+
   @override
   void initState() {
     super.initState();
@@ -63,8 +66,14 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
 
   @override
   void dispose() {
+    _sheetExtent.dispose();
     _mapController.dispose();
     super.dispose();
+  }
+
+  void _clearSelection() {
+    _sheetExtent.value = HotspotDetailSheet.peekSize;
+    setState(() => _selected = null);
   }
 
   Future<void> _init() async {
@@ -184,6 +193,7 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
       }
     }
     if (match == null) return;
+    _sheetExtent.value = HotspotDetailSheet.peekSize;
     setState(() => _selected = match);
   }
 
@@ -371,174 +381,181 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
       return const Center(child: BrandProgressIndicator());
     }
 
-    return Stack(
-      children: [
-        FlutterMap(
-          mapController: _mapController,
-          options: MapOptions(
-            initialCenter: _center!,
-            initialZoom: _defaultZoom,
-            // Empty-map tap dismisses the persistent sheet (not modal).
-            onTap: (_, __) {
-              if (_selected != null) {
-                setState(() => _selected = null);
-              }
-            },
-          ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bodyHeight = constraints.maxHeight;
+        return Stack(
           children: [
-            TileLayer(
-              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              userAgentPackageName: 'com.thelifelist.app',
-              // Explicit provider so the bounded BuiltInMapCachingProvider
-              // from [MapTileCache.ensureConfigured] is the one in use.
-              tileProvider: NetworkTileProvider(
-                cachingProvider:
-                    BuiltInMapCachingProvider.getOrCreateInstance(),
+            FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(
+                initialCenter: _center!,
+                initialZoom: _defaultZoom,
+                // Empty-map tap dismisses the persistent sheet (not modal).
+                onTap: (_, __) {
+                  if (_selected != null) _clearSelection();
+                },
               ),
-            ),
-            MarkerLayer(
-              markers: [
-                // Keep "you are here" outside clustering so it never
-                // collapses into a hotspot badge.
-                Marker(
-                  point: _center!,
-                  width: 28,
-                  height: 28,
-                  alignment: Alignment.center,
-                  child: const _UserLocationDot(),
+              children: [
+                TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.thelifelist.app',
+                  // Explicit provider so the bounded BuiltInMapCachingProvider
+                  // from [MapTileCache.ensureConfigured] is the one in use.
+                  tileProvider: NetworkTileProvider(
+                    cachingProvider:
+                        BuiltInMapCachingProvider.getOrCreateInstance(),
+                  ),
+                ),
+                MarkerLayer(
+                  markers: [
+                    // Keep "you are here" outside clustering so it never
+                    // collapses into a hotspot badge.
+                    Marker(
+                      point: _center!,
+                      width: 28,
+                      height: 28,
+                      alignment: Alignment.center,
+                      child: const _UserLocationDot(),
+                    ),
+                  ],
+                ),
+                MarkerClusterLayerWidget(
+                  options: MarkerClusterLayerOptions(
+                    maxClusterRadius: 80,
+                    size: const Size(40, 40),
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.all(50),
+                    maxZoom: 17,
+                    zoomToBoundsOnClick: true,
+                    // Don't recenter the camera when opening a hotspot sheet —
+                    // the peek sheet already anchors attention.
+                    centerMarkerOnClick: false,
+                    showPolygon: false,
+                    markers: _hotspotMarkers(Theme.of(context).colorScheme),
+                    onMarkerTap: _onHotspotMarkerTap,
+                    builder: (context, markers) {
+                      final scheme = Theme.of(context).colorScheme;
+                      final theme = Theme.of(context);
+                      return Semantics(
+                        button: true,
+                        label: '${markers.length} hotspots',
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: scheme.primary,
+                          ),
+                          child: Center(
+                            child: Text(
+                              '${markers.length}',
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                color: scheme.onPrimary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                // OSM tile usage policy requires visible attribution.
+                SimpleAttributionWidget(
+                  source: const Text('OpenStreetMap contributors'),
+                  alignment: Alignment.bottomLeft,
+                  onTap: () => launchUrl(
+                    Uri.parse('https://www.openstreetmap.org/copyright'),
+                    mode: LaunchMode.externalApplication,
+                  ),
                 ),
               ],
             ),
-            MarkerClusterLayerWidget(
-              options: MarkerClusterLayerOptions(
-                maxClusterRadius: 80,
-                size: const Size(40, 40),
-                alignment: Alignment.center,
-                padding: const EdgeInsets.all(50),
-                maxZoom: 17,
-                zoomToBoundsOnClick: true,
-                // Don't recenter the camera when opening a hotspot sheet —
-                // the peek sheet already anchors attention.
-                centerMarkerOnClick: false,
-                showPolygon: false,
-                markers: _hotspotMarkers(Theme.of(context).colorScheme),
-                onMarkerTap: _onHotspotMarkerTap,
-                builder: (context, markers) {
-                  final scheme = Theme.of(context).colorScheme;
-                  final theme = Theme.of(context);
-                  return Semantics(
-                    button: true,
-                    label: '${markers.length} hotspots',
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: scheme.primary,
-                      ),
-                      child: Center(
-                        child: Text(
-                          '${markers.length}',
-                          style: theme.textTheme.labelLarge?.copyWith(
-                            color: scheme.onPrimary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+            if (_loading)
+              const Positioned.fill(
+                child: IgnorePointer(
+                  child: Center(child: BrandProgressIndicator()),
+                ),
+              ),
+            if (_showingStale && _cacheFetchedAt != null)
+              Positioned(
+                left: AppSpacing.lg,
+                right: AppSpacing.lg,
+                top: AppSpacing.lg,
+                child: Material(
+                  elevation: 1,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    child: Text(
+                      'Showing results from ${formatRelativeTime(_cacheFetchedAt!)} — couldn’t refresh',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
-                  );
-                },
-              ),
-            ),
-            // OSM tile usage policy requires visible attribution.
-            SimpleAttributionWidget(
-              source: const Text('OpenStreetMap contributors'),
-              alignment: Alignment.bottomLeft,
-              onTap: () => launchUrl(
-                Uri.parse('https://www.openstreetmap.org/copyright'),
-                mode: LaunchMode.externalApplication,
-              ),
-            ),
-          ],
-        ),
-        if (_loading)
-          const Positioned.fill(
-            child: IgnorePointer(
-              child: Center(child: BrandProgressIndicator()),
-            ),
-          ),
-        if (_showingStale && _cacheFetchedAt != null)
-          Positioned(
-            left: AppSpacing.lg,
-            right: AppSpacing.lg,
-            top: AppSpacing.lg,
-            child: Material(
-              elevation: 1,
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.md),
-                child: Text(
-                  'Showing results from ${formatRelativeTime(_cacheFetchedAt!)} — couldn’t refresh',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
-            ),
-          ),
-        if (_error != null && !_loading)
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: _selected == null ? 24 : 140,
-            child: Material(
-              elevation: 2,
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.error_outline,
-                      color: Theme.of(context).colorScheme.error,
+            if (_error != null && !_loading)
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: _selected == null ? 24 : 140,
+                child: Material(
+                  elevation: 2,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.error_outline,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(_error!, maxLines: 2)),
+                        TextButton(onPressed: _load, child: const Text('Retry')),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(_error!, maxLines: 2)),
-                    TextButton(onPressed: _load, child: const Text('Retry')),
-                  ],
+                  ),
                 ),
               ),
+            // Persistent peek sheet — above nav (this Stack is the tab body),
+            // map stays pannable; marker taps swap content in place.
+            if (_selected != null)
+              HotspotDetailSheet(
+                key: ValueKey(_selected!.locId),
+                hotspot: _selected!,
+                apiKey: widget.apiKey,
+                lat: _center!.latitude,
+                lng: _center!.longitude,
+                onDismiss: _clearSelection,
+                onExtentChanged: (extent) => _sheetExtent.value = extent,
+              ),
+            // Recenter tracks the sheet's live extent so it stays just above
+            // the sheet at every drag position (not a static peek guess).
+            ValueListenableBuilder<double>(
+              valueListenable: _sheetExtent,
+              builder: (context, extent, child) {
+                return Positioned(
+                  right: AppSpacing.lg,
+                  bottom: AppSpacing.lg +
+                      (_selected == null ? 0 : bodyHeight * extent),
+                  child: child!,
+                );
+              },
+              child: FloatingActionButton.small(
+                heroTag: 'hotspots_recenter',
+                tooltip: 'Recenter map on my location',
+                backgroundColor: Theme.of(context).colorScheme.surface,
+                foregroundColor: Theme.of(context).colorScheme.primary,
+                onPressed: _recenter,
+                child: const Icon(Icons.my_location),
+              ),
             ),
-          ),
-        // Persistent peek sheet — above nav (this Stack is the tab body),
-        // map stays pannable; marker taps swap content in place.
-        if (_selected != null)
-          HotspotDetailSheet(
-            key: ValueKey(_selected!.locId),
-            hotspot: _selected!,
-            apiKey: widget.apiKey,
-            lat: _center!.latitude,
-            lng: _center!.longitude,
-            onDismiss: () => setState(() => _selected = null),
-          ),
-        // Recenter sits above the sheet in z-order so it stays tappable,
-        // and lifts vertically when the peek sheet is open.
-        Positioned(
-          right: AppSpacing.lg,
-          bottom: AppSpacing.lg +
-              (_selected == null
-                  ? 0
-                  : MediaQuery.sizeOf(context).height *
-                      HotspotDetailSheet.peekSize),
-          child: FloatingActionButton.small(
-            heroTag: 'hotspots_recenter',
-            tooltip: 'Recenter map on my location',
-            backgroundColor: Theme.of(context).colorScheme.surface,
-            foregroundColor: Theme.of(context).colorScheme.primary,
-            onPressed: _recenter,
-            child: const Icon(Icons.my_location),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 }

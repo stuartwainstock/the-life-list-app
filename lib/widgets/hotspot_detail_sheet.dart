@@ -19,7 +19,8 @@ import 'species_thumbnail.dart';
 ///
 /// Tickets: `docs/tickets/hotspot-marker-bottom-sheet.md`,
 /// `docs/tickets/hotspot-species-list.md`,
-/// `docs/tickets/hotspot-checklist-date-range.md`
+/// `docs/tickets/hotspot-checklist-date-range.md`,
+/// `docs/tickets/hotspot-sheet-polish.md`
 class HotspotDetailSheet extends StatefulWidget {
   final Hotspot hotspot;
   final String apiKey;
@@ -27,8 +28,14 @@ class HotspotDetailSheet extends StatefulWidget {
   final double lng;
   final VoidCallback onDismiss;
 
+  /// Fires as the sheet is dragged so parents can keep chrome (e.g. the
+  /// recenter FAB) anchored just above the sheet's current top edge.
+  final ValueChanged<double>? onExtentChanged;
+
   static const double peekSize = 0.2;
-  static const double expandedSize = 0.62;
+
+  /// Near-full body height — leaves a sliver of map under the AppBar.
+  static const double expandedSize = 0.9;
 
   const HotspotDetailSheet({
     super.key,
@@ -37,6 +44,7 @@ class HotspotDetailSheet extends StatefulWidget {
     required this.lat,
     required this.lng,
     required this.onDismiss,
+    this.onExtentChanged,
   });
 
   @override
@@ -144,6 +152,7 @@ class _HotspotDetailSheetState extends State<HotspotDetailSheet> {
 
     return NotificationListener<DraggableScrollableNotification>(
       onNotification: (notification) {
+        widget.onExtentChanged?.call(notification.extent);
         if (notification.extent <= 0.02) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) widget.onDismiss();
@@ -157,6 +166,8 @@ class _HotspotDetailSheetState extends State<HotspotDetailSheet> {
         minChildSize: 0,
         maxChildSize: HotspotDetailSheet.expandedSize,
         snap: true,
+        // Collapsed / peek / expanded — no intermediate snap; the taller
+        // expanded size makes a mid stop feel like dead weight.
         snapSizes: const [
           0,
           HotspotDetailSheet.peekSize,
@@ -242,13 +253,6 @@ class _HotspotDetailSheetState extends State<HotspotDetailSheet> {
                     ),
                   ),
                 ],
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  'Drag up for full checklist',
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
                 const SizedBox(height: AppSpacing.lg),
                 if (_loadingSpecies)
                   ...List.generate(
