@@ -83,8 +83,14 @@ use their own key rather than sharing one.
 
 ```
 flutter pub get
-flutter run
+flutter run --dart-define=XENO_CANTO_API_KEY=your_key_here
 ```
+
+Songs & Calls on the species detail page use Xeno-canto. Register at
+https://xeno-canto.org, verify your email, then copy the API key from
+your account page. Pass it at build/run time with `--dart-define` (never
+commit the key into source). Without the define, the rest of the app
+still works — the Songs & Calls section simply stays hidden.
 
 Plug in your Android phone via USB with USB debugging enabled (Settings →
 About phone → tap "Build number" 7 times → Developer options → USB
@@ -207,8 +213,9 @@ Implemented:
   photographer attribution when Wikimedia Commons has more than one
   image for a species) that animates in from the thumbnail you tapped
   rather than cutting straight to it, serif/sans typographic hierarchy,
-  Wikipedia summary, and a capped/expandable feed of recent local
-  sightings
+  best-available Song and Call recordings from Xeno-canto (play/pause
+  with recordist credit; section omitted when none exist), Wikipedia
+  summary, and a capped/expandable feed of recent local sightings
 - **My Life List** — mark any species as seen (count, location, date)
   from its detail page, with a small on-brand animation on the button
   when you do; view/remove entries in the Life List tab. Stored locally
@@ -219,7 +226,8 @@ Implemented:
 - Settings: light/dark/system theme, a miles/kilometers display toggle
   (distance is always stored and sent to eBird in km — miles is a
   display-only conversion), and an About section crediting eBird,
-  Wikipedia/Wikimedia Commons, and OpenStreetMap as data sources
+  Wikipedia/Wikimedia Commons, Xeno-canto, and OpenStreetMap as data
+  sources
 - Design tokens (`lib/theme/`) implementing `brand.md`'s palette and
   type scale, with real light/dark support (system-following by default,
   manual override available), and an accessibility pass on top of it
@@ -254,12 +262,6 @@ rewrite:
   API. Not self-serve — eBird's public API is read-only, and write
   access is a relationship you'd build directly with the eBird/Cornell
   Lab team, not something granted through the API keygen page.
-
-### Someday / backlog
-
-- **Bird call audio** — Xeno-canto has a free public API
-  (https://xeno-canto.org/explore/api) that could slot in next to the
-  photo on the species page.
 
 ## eBird API reference
 

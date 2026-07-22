@@ -7,19 +7,23 @@ import '../services/ebird_service.dart';
 import '../services/wikipedia_service.dart';
 import '../services/life_list_service.dart';
 import '../services/species_image_cache.dart';
+import '../services/xeno_canto_service.dart';
+import '../models/xeno_canto_recording.dart';
 import '../utils/relative_time.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_hairline.dart';
 import '../widgets/skeleton.dart';
 import '../widgets/species_detail_skeleton.dart';
+import '../widgets/songs_and_calls_section.dart';
 
 /// Species detail — identity, Wikipedia context, nearby sightings feed.
 ///
 /// ## Hierarchy (intentional)
-/// Photo → common name (loud) → scientific name (quiet label) → description
-/// card → sightings feed card. Earlier versions flattened all of that into
-/// same-weight text; see `docs/tickets/species-detail-redesign.md`.
+/// Photo → common name (loud) → scientific name (quiet label) →
+/// description → Songs & Calls → sightings feed. See
+/// `docs/tickets/species-detail-redesign.md` and
+/// `docs/tickets/xeno-canto-audio.md`.
 ///
 /// ## Hero photo
 /// Collapsing [SliverAppBar] with optional Commons gallery (swipe + dots)
@@ -27,6 +31,10 @@ import '../widgets/species_detail_skeleton.dart';
 /// `docs/tickets/species-photo-attribution-and-gallery.md`.
 /// List → detail shared-element flight:
 /// `docs/tickets/species-photo-hero-transition.md`.
+///
+/// ## Songs & Calls
+/// Best-quality Song and Call from Xeno-canto when available — hidden
+/// entirely when none resolve.
 ///
 /// ## Recent sightings
 /// Capped to [_SightingsSection.initialCap] with in-place "View all N"
@@ -75,11 +83,14 @@ class _SpeciesDetailScreenState extends State<SpeciesDetailScreen> {
   late final EbirdService _ebird = EbirdService(widget.apiKey);
   final _wiki = WikipediaService();
   final _lifeList = LifeListService();
+  final _xenoCanto = XenoCantoService();
 
   bool _loading = true;
   List<Observation> _sightings = [];
   WikiSummary? _summary;
   bool _isLogged = false;
+  XenoCantoRecording? _song;
+  XenoCantoRecording? _call;
 
   /// Bumped only when the user confirms an add — drives the one-shot FAB
   /// celebration without firing when we hydrate an already-logged species.
@@ -100,6 +111,7 @@ class _SpeciesDetailScreenState extends State<SpeciesDetailScreen> {
   void initState() {
     super.initState();
     _load();
+    _loadAudio();
     _checkLogged();
   }
 
@@ -123,6 +135,21 @@ class _SpeciesDetailScreenState extends State<SpeciesDetailScreen> {
       _summary = results[1] as WikiSummary?;
       _loading = false;
     });
+  }
+
+  /// Independent of the main skeleton — missing audio just hides the section.
+  Future<void> _loadAudio() async {
+    if (widget.sciName.trim().isEmpty) return;
+    try {
+      final pair = await _xenoCanto.bestSongAndCall(sciName: widget.sciName);
+      if (!mounted) return;
+      setState(() {
+        _song = pair.song;
+        _call = pair.call;
+      });
+    } catch (_) {
+      // Leave song/call null — section stays hidden.
+    }
   }
 
   Future<void> _checkLogged() async {
@@ -304,6 +331,17 @@ class _SpeciesDetailScreenState extends State<SpeciesDetailScreen> {
                   color: scheme.onSurface,
                 ),
               ),
+            ),
+          ],
+
+          // Songs & Calls — after the description, still above the sightings
+          // feed (`docs/tickets/species-detail-reorder-songs-description.md`).
+          if (_song != null || _call != null) ...[
+            const SizedBox(height: AppSpacing.xl),
+            const AppHairline(),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+              child: SongsAndCallsSection(song: _song, call: _call),
             ),
           ],
 

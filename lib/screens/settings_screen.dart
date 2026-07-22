@@ -185,8 +185,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Text(
             'Sightings, hotspots, and taxonomy data come from eBird '
             '(Cornell Lab of Ornithology). Species summaries and photos '
-            'come from Wikipedia / Wikimedia Commons. Map tiles come from '
-            'OpenStreetMap.',
+            'come from Wikipedia / Wikimedia Commons. Songs and calls come '
+            'from Xeno-canto. Map tiles come from OpenStreetMap.',
             style: theme.textTheme.bodyMedium,
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -199,6 +199,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onPressed: () => _openUrl('https://www.wikimedia.org'),
             icon: const Icon(Icons.open_in_new, size: 18),
             label: const Text('Wikimedia'),
+          ),
+          TextButton.icon(
+            onPressed: () => _openUrl('https://xeno-canto.org'),
+            icon: const Icon(Icons.open_in_new, size: 18),
+            label: const Text('Xeno-canto'),
           ),
           TextButton.icon(
             onPressed: () =>
