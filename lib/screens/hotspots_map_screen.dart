@@ -9,10 +9,10 @@ import '../services/ebird_service.dart';
 import '../services/location_service.dart';
 import '../services/settings_service.dart';
 import '../theme/app_spacing.dart';
-import '../theme/app_theme.dart';
 import '../utils/relative_time.dart';
 import '../widgets/hotspot_detail_sheet.dart';
 import '../widgets/skeleton.dart';
+import '../widgets/branded_app_bar.dart';
 import 'species_search_screen.dart';
 
 /// Map of nearby eBird hotspots, using OpenStreetMap tiles via flutter_map
@@ -327,9 +327,9 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Nearby Hotspots'),
-        toolbarHeight: AppTheme.toolbarHeightOf(context),
+      appBar: BrandedAppBar(
+        context: context,
+        title: 'Nearby Hotspots',
         actions: [
           IconButton(
             icon: const Icon(Icons.search),

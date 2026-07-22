@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/settings_service.dart';
 import '../theme/app_spacing.dart';
-import '../theme/app_theme.dart';
+import '../widgets/branded_app_bar.dart';
 
 class SettingsScreen extends StatefulWidget {
   final VoidCallback onApiKeySaved;
@@ -55,9 +55,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
-        toolbarHeight: AppTheme.toolbarHeightOf(context),
+      appBar: BrandedAppBar(
+        context: context,
+        title: 'Settings',
       ),
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.lg),

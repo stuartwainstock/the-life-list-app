@@ -635,11 +635,34 @@ class _HeroAppBarState extends State<_HeroAppBar>
                 itemCount: photos.length,
                 onPageChanged: (i) => setState(() => _index = i),
                 itemBuilder: (context, i) {
+                  final photo = photos[i];
+                  final attr = photo.attributionText;
+                  final indexLabel = multi
+                      ? 'Photo ${i + 1} of ${photos.length} of a ${widget.comName}'
+                      : 'Photo of a ${widget.comName}';
+                  final label = (attr != null && attr.isNotEmpty)
+                      ? '$indexLabel. $attr'
+                      : indexLabel;
+                  final sourceUrl = photo.sourcePageUrl;
                   return Semantics(
                     image: true,
-                    label: 'Photo of a ${widget.comName}',
+                    label: label,
+                    button: sourceUrl != null && sourceUrl.isNotEmpty,
+                    hint: sourceUrl != null && sourceUrl.isNotEmpty
+                        ? 'Double-tap to open photo source'
+                        : null,
+                    onTap: sourceUrl != null && sourceUrl.isNotEmpty
+                        ? () async {
+                            final uri = Uri.tryParse(sourceUrl);
+                            if (uri == null) return;
+                            await launchUrl(
+                              uri,
+                              mode: LaunchMode.externalApplication,
+                            );
+                          }
+                        : null,
                     child: CachedNetworkImage(
-                      imageUrl: photos[i].imageUrl,
+                      imageUrl: photo.imageUrl,
                       httpHeaders: WikipediaService.imageRequestHeaders,
                       cacheManager: SpeciesImageCache.instance,
                       fit: BoxFit.cover,
@@ -699,21 +722,25 @@ class _HeroAppBarState extends State<_HeroAppBar>
                 left: AppSpacing.lg,
                 right: AppSpacing.lg,
                 bottom: multi ? 28 : AppSpacing.md,
-                child: GestureDetector(
-                  onTap: _current?.sourcePageUrl != null ? _openSource : null,
-                  child: Text(
-                    attribution,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.92),
-                      height: 1.25,
-                      shadows: const [
-                        Shadow(
-                          blurRadius: 6,
-                          color: Color(0x88000000),
-                        ),
-                      ],
+                // Attribution is already in each photo's Semantics label —
+                // keep the visible caption but don't double-announce it.
+                child: ExcludeSemantics(
+                  child: GestureDetector(
+                    onTap: _current?.sourcePageUrl != null ? _openSource : null,
+                    child: Text(
+                      attribution,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.92),
+                        height: 1.25,
+                        shadows: const [
+                          Shadow(
+                            blurRadius: 6,
+                            color: Color(0x88000000),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/life_list_entry.dart';
 import '../services/life_list_service.dart';
-import '../theme/app_theme.dart';
 import '../widgets/species_thumbnail.dart';
+import '../widgets/branded_app_bar.dart';
 
 /// The user's personal life list — every species they've marked as seen,
 /// stored locally on-device (see LifeListService for why, and for the
@@ -62,9 +62,9 @@ class _LifeListScreenState extends State<LifeListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('My Life List'),
-        toolbarHeight: AppTheme.toolbarHeightOf(context),
+      appBar: BrandedAppBar(
+        context: context,
+        title: 'My Life List',
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),

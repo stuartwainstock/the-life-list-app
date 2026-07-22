@@ -91,7 +91,7 @@ future rework if skipped:
   If not, and this shape is likely to show up on a second screen later,
   build it as a shared widget in `lib/widgets/` now rather than
   duplicating it later. The AppBar inconsistency between Sightings and
-  Hotspots (`docs/tickets/shared-appbar-component.md`) is the direct
+  Hotspots (`docs/tickets/done/shared-appbar-component.md`) is the direct
   result of not doing this early.
 - **Design systems and token strategy.** Colors, type, spacing, and
   radius should come from `lib/theme/` (`AppColors`, `AppTypography`,
@@ -118,6 +118,13 @@ folders for.
   otherwise appear.
 
 **Molecules** (`lib/widgets/`):
+- `BrandedAppBar` — canonical title + actions app bar for top-level
+  screens (Sightings, Hotspots, Life List, Settings). Applies
+  `AppTheme.toolbarHeightOf` and the Public Sans title style from
+  `ThemeData.appBarTheme` in one place — use this instead of hand-rolling
+  `AppBar(...)` on any new tab screen
+  (`docs/tickets/done/shared-appbar-component.md`). Species detail's
+  `_HeroAppBar` stays separate (content-driven collapsing hero).
 - `SightingListRow` — thumbnail + common name + location + relative
   time. The base unit of both the sightings list and (in spirit) the
   hotspot checklist rows.
@@ -144,12 +151,11 @@ folders for.
   intentionally distinct from the standard app bar below, since it
   displays content, not chrome).
 
-**Standard app bar** (in progress — see
-`docs/tickets/shared-appbar-component.md`): the title + actions app bar
-shape used by the four top-level tab screens (Sightings, Hotspots, Life
-List, Settings) should be built from one shared widget, not
-reimplemented per screen — this is what the search/tune-icon
-inconsistency between screens came from.
+**Standard app bar:** use `BrandedAppBar` (`lib/widgets/branded_app_bar.dart`)
+for any new top-level / tab screen — do not reimplement
+`AppBar(title: …, toolbarHeight: AppTheme.toolbarHeightOf(…))` from
+scratch. Species detail's collapsing `_HeroAppBar` remains the exception
+(content, not chrome).
 
 ## Patterns to reach for next, as relevant tickets come up
 

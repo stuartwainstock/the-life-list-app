@@ -17,10 +17,15 @@ import 'species_thumbnail.dart';
 /// `GET /data/obs/{locId}/recent`, sorted A–Z by common name (checklist
 /// scan, not live-feed taxonomic order).
 ///
+/// TalkBack users get explicit expand / collapse / close actions — drag is
+/// not reliable under screen-reader swipe vocabulary
+/// (`docs/tickets/talkback-verification-pass.md`).
+///
 /// Tickets: `docs/tickets/hotspot-marker-bottom-sheet.md`,
 /// `docs/tickets/hotspot-species-list.md`,
 /// `docs/tickets/hotspot-checklist-date-range.md`,
-/// `docs/tickets/hotspot-sheet-polish.md`
+/// `docs/tickets/hotspot-sheet-polish.md`,
+/// `docs/tickets/talkback-verification-pass.md`
 class HotspotDetailSheet extends StatefulWidget {
   final Hotspot hotspot;
   final String apiKey;
@@ -54,16 +59,39 @@ class HotspotDetailSheet extends StatefulWidget {
 class _HotspotDetailSheetState extends State<HotspotDetailSheet> {
   late final EbirdService _ebird = EbirdService(widget.apiKey);
   final _settings = SettingsService();
+  final _sheetController = DraggableScrollableController();
 
   bool _loadingSpecies = true;
   String? _speciesError;
   List<Observation> _species = const [];
   int _backDays = SettingsService.defaultSightingsBackDays;
 
+  /// Midpoint between peek and expanded — drives expand/collapse button label.
+  bool _isExpanded = false;
+
   @override
   void initState() {
     super.initState();
+    _sheetController.addListener(_onSheetExtent);
     _loadSpecies();
+  }
+
+  @override
+  void dispose() {
+    _sheetController.removeListener(_onSheetExtent);
+    _sheetController.dispose();
+    super.dispose();
+  }
+
+  void _onSheetExtent() {
+    if (!_sheetController.isAttached) return;
+    final extent = _sheetController.size;
+    widget.onExtentChanged?.call(extent);
+    final expanded = extent >=
+        (HotspotDetailSheet.peekSize + HotspotDetailSheet.expandedSize) / 2;
+    if (expanded != _isExpanded && mounted) {
+      setState(() => _isExpanded = expanded);
+    }
   }
 
   @override
@@ -131,6 +159,26 @@ class _HotspotDetailSheetState extends State<HotspotDetailSheet> {
     );
   }
 
+  Future<void> _animateTo(double size) async {
+    if (!_sheetController.isAttached) return;
+    await _sheetController.animateTo(
+      size,
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  Future<void> _expandSheet() => _animateTo(HotspotDetailSheet.expandedSize);
+
+  Future<void> _collapseSheet() => _animateTo(HotspotDetailSheet.peekSize);
+
+  Future<void> _closeSheet() async {
+    if (_sheetController.isAttached) {
+      await _animateTo(0);
+    }
+    if (mounted) widget.onDismiss();
+  }
+
   String get _recentCountLabel {
     final n = _species.length;
     final days = _backDays;
@@ -153,6 +201,12 @@ class _HotspotDetailSheetState extends State<HotspotDetailSheet> {
     return NotificationListener<DraggableScrollableNotification>(
       onNotification: (notification) {
         widget.onExtentChanged?.call(notification.extent);
+        final expanded = notification.extent >=
+            (HotspotDetailSheet.peekSize + HotspotDetailSheet.expandedSize) /
+                2;
+        if (expanded != _isExpanded) {
+          setState(() => _isExpanded = expanded);
+        }
         if (notification.extent <= 0.02) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) widget.onDismiss();
@@ -162,6 +216,7 @@ class _HotspotDetailSheetState extends State<HotspotDetailSheet> {
         return false;
       },
       child: DraggableScrollableSheet(
+        controller: _sheetController,
         initialChildSize: HotspotDetailSheet.peekSize,
         minChildSize: 0,
         maxChildSize: HotspotDetailSheet.expandedSize,
@@ -174,160 +229,202 @@ class _HotspotDetailSheetState extends State<HotspotDetailSheet> {
           HotspotDetailSheet.expandedSize,
         ],
         builder: (context, scrollController) {
-          return Material(
-            color: theme.scaffoldBackgroundColor,
-            elevation: 3,
-            shadowColor: scheme.shadow.withValues(alpha: 0.25),
-            shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.vertical(
-                top: Radius.circular(AppRadius.lg),
-              ),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: ListView(
-              controller: scrollController,
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.xl,
-                AppSpacing.sm,
-                AppSpacing.xl,
-                AppSpacing.lg,
-              ),
-              children: [
-                Center(
-                  child: Semantics(
-                    label: 'Drag handle',
-                    hint: 'Drag up for full checklist',
-                    child: SizedBox(
-                      width: 48,
-                      height: 44,
-                      child: Center(
-                        child: Container(
-                          width: 32,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: scheme.outlineVariant,
-                            borderRadius: BorderRadius.circular(AppRadius.pill),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+          return Semantics(
+            container: true,
+            label: 'Hotspot details for ${widget.hotspot.locName}',
+            child: Material(
+              color: theme.scaffoldBackgroundColor,
+              elevation: 3,
+              shadowColor: scheme.shadow.withValues(alpha: 0.25),
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.vertical(
+                  top: Radius.circular(AppRadius.lg),
                 ),
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  widget.hotspot.locName,
-                  style: theme.textTheme.titleLarge,
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: ListView(
+                controller: scrollController,
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.xl,
+                  AppSpacing.sm,
+                  AppSpacing.xl,
+                  AppSpacing.lg,
                 ),
-                const SizedBox(height: AppSpacing.sm),
-                if (_loadingSpecies)
-                  Text(
-                    _backDays == 1
-                        ? 'Loading species from the last 1 day…'
-                        : 'Loading species from the last $_backDays days…',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  )
-                else if (_speciesError == null)
-                  Text(
-                    _recentCountLabel,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: scheme.onSurface,
-                    ),
-                  )
-                else
-                  Text(
-                    _backDays == 1
-                        ? 'Species from the last 1 day'
-                        : 'Species from the last $_backDays days',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                if (allTime != null) ...[
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    '$allTime recorded all-time',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: AppSpacing.lg),
-                if (_loadingSpecies)
-                  ...List.generate(
-                    6,
-                    (_) => const Padding(
-                      padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SkeletonBox(
-                            width: 56,
-                            height: 56,
-                            borderRadius: AppRadius.md,
-                          ),
-                          SizedBox(width: AppSpacing.md),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                SkeletonBox(width: 160, height: 16),
-                                SizedBox(height: AppSpacing.sm),
-                                SkeletonBox(width: 120, height: 12),
-                              ],
+                children: [
+                  // Visual drag cue for sighted users — not a TalkBack target;
+                  // expand/collapse/close buttons below are the alternate.
+                  ExcludeSemantics(
+                    child: Center(
+                      child: SizedBox(
+                        width: 48,
+                        height: 20,
+                        child: Center(
+                          child: Container(
+                            width: 32,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: scheme.outlineVariant,
+                              borderRadius:
+                                  BorderRadius.circular(AppRadius.pill),
                             ),
                           ),
-                        ],
+                        ),
                       ),
                     ),
-                  )
-                else if (_speciesError != null)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Couldn’t load species list',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: scheme.onSurfaceVariant,
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton(
+                            onPressed:
+                                _isExpanded ? _collapseSheet : _expandSheet,
+                            style: TextButton.styleFrom(
+                              foregroundColor: scheme.primary,
+                              padding: EdgeInsets.zero,
+                              minimumSize: const Size(0, 44),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: Text(
+                              _isExpanded
+                                  ? 'Collapse checklist'
+                                  : 'Show full checklist',
+                            ),
                           ),
                         ),
-                        const SizedBox(height: AppSpacing.sm),
-                        TextButton(
-                          onPressed: _loadSpecies,
-                          style: TextButton.styleFrom(
-                            foregroundColor: scheme.primary,
-                            padding: EdgeInsets.zero,
-                            minimumSize: const Size(0, 40),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          child: const Text('Retry'),
+                      ),
+                      TextButton(
+                        onPressed: _closeSheet,
+                        style: TextButton.styleFrom(
+                          foregroundColor: scheme.onSurfaceVariant,
+                          padding: EdgeInsets.zero,
+                          minimumSize: const Size(0, 44),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
-                      ],
-                    ),
-                  )
-                else if (_species.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-                    child: Text(
+                        child: const Text('Close'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    widget.hotspot.locName,
+                    style: theme.textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  if (_loadingSpecies)
+                    Text(
                       _backDays == 1
-                          ? 'No species seen here in the last 1 day.'
-                          : 'No species seen here in the last $_backDays days.',
+                          ? 'Loading species from the last 1 day…'
+                          : 'Loading species from the last $_backDays days…',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    )
+                  else if (_speciesError == null)
+                    Text(
+                      _recentCountLabel,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: scheme.onSurface,
+                      ),
+                    )
+                  else
+                    Text(
+                      _backDays == 1
+                          ? 'Species from the last 1 day'
+                          : 'Species from the last $_backDays days',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: scheme.onSurfaceVariant,
                       ),
                     ),
-                  )
-                else
-                  ..._species.map(
-                    (obs) => _HotspotSpeciesRow(
-                      observation: obs,
-                      onTap: () => _openSpecies(obs),
+                  if (allTime != null) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      '$allTime recorded all-time',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
                     ),
-                  ),
-              ],
+                  ],
+                  const SizedBox(height: AppSpacing.lg),
+                  if (_loadingSpecies)
+                    ...List.generate(
+                      6,
+                      (_) => const Padding(
+                        padding:
+                            EdgeInsets.symmetric(vertical: AppSpacing.md),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SkeletonBox(
+                              width: 56,
+                              height: 56,
+                              borderRadius: AppRadius.md,
+                            ),
+                            SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  SkeletonBox(width: 160, height: 16),
+                                  SizedBox(height: AppSpacing.sm),
+                                  SkeletonBox(width: 120, height: 12),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  else if (_speciesError != null)
+                    Padding(
+                      padding:
+                          const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Couldn’t load species list',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          TextButton(
+                            onPressed: _loadSpecies,
+                            style: TextButton.styleFrom(
+                              foregroundColor: scheme.primary,
+                              padding: EdgeInsets.zero,
+                              minimumSize: const Size(0, 40),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    )
+                  else if (_species.isEmpty)
+                    Padding(
+                      padding:
+                          const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                      child: Text(
+                        _backDays == 1
+                            ? 'No species seen here in the last 1 day.'
+                            : 'No species seen here in the last $_backDays days.',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    )
+                  else
+                    ..._species.map(
+                      (obs) => _HotspotSpeciesRow(
+                        observation: obs,
+                        onTap: () => _openSpecies(obs),
+                      ),
+                    ),
+                ],
+              ),
             ),
           );
         },

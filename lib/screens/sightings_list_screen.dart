@@ -8,11 +8,11 @@ import '../services/ebird_taxonomy_service.dart';
 import '../services/location_service.dart';
 import '../services/settings_service.dart';
 import '../theme/app_spacing.dart';
-import '../theme/app_theme.dart';
 import '../utils/relative_time.dart';
 import '../widgets/sighting_list_row.dart';
 import '../widgets/skeleton_sighting_row.dart';
 import '../widgets/species_thumbnail.dart';
+import '../widgets/branded_app_bar.dart';
 import '../services/wikipedia_service.dart';
 import 'species_detail_screen.dart';
 import 'species_search_screen.dart';
@@ -473,9 +473,9 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
     final list = _showNotableOnly ? _notable : _all;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Nearby Sightings'),
-        toolbarHeight: AppTheme.toolbarHeightOf(context),
+      appBar: BrandedAppBar(
+        context: context,
+        title: 'Nearby Sightings',
         actions: [
           IconButton(
             icon: const Icon(Icons.search),

@@ -2,10 +2,9 @@
 
 ## Active
 
-- [ ] **Extract shared AppBar component** - one shared widget builds all four top-level screens' app bars instead of each hand-rolling its own, so future action/icon drift can't happen silently — see `docs/tickets/shared-appbar-component.md`
-- [ ] **Live TalkBack verification pass** - actual on-device screen-reader walkthrough (hotspot sheet drag gesture, map markers, hero gallery), distinct from the prior code-level accessibility pass — see `docs/tickets/talkback-verification-pass.md`
-
 ## Waiting On
+
+- [ ] **Live TalkBack verification pass** - prep done (sheet expand/collapse/close + gallery Semantics); awaiting Stuart’s on-device TalkBack walkthrough, then fix anything found — see `docs/tickets/talkback-verification-pass.md`
 
 ## Someday
 - [ ] **Play Store readiness checklist** - real release signing key (currently debug-signed, see TODO in `android/app/build.gradle.kts`), a privacy policy (required once requesting location + storing an API key), store listing assets (screenshots, feature graphic, descriptions), and the Play Console content rating questionnaire — revisit once actually ready to submit
@@ -16,6 +15,7 @@
 
 ## Done
 
+- [x] ~~Extract shared AppBar component~~ (2026-07-22)
 - [x] ~~Test coverage baseline~~ (2026-07-22)
 - [x] ~~First-run onboarding fix~~ (2026-07-22)
 - [x] ~~OSM attribution wording fix~~ (2026-07-22)

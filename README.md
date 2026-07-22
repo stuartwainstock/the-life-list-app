@@ -7,8 +7,8 @@ It started from a simple instinct: open the app, see what's around you,
 right now. The Life List grew its own identity from there: sightings
 grouped the way birders actually think about birds (by family, not
 alphabet), a species search that reaches beyond what's nearby, hotspots
-with their full all-time checklists, real photo attribution instead of
-borrowed images with no credit, and a personal life list that's been
+with their own recent species checklists, real photo attribution instead
+of borrowed images with no credit, and a personal life list that's been
 designed from day one to eventually talk to eBird's own systems instead
 of living in its own silo forever.
 
@@ -22,10 +22,10 @@ self-serve — see Phase 4).
 - `lib/main.dart` — app entry point, theme wiring, manual + system
   dark-mode handling
 - `lib/screens/` — Sightings list (family-grouped, sticky headers,
-  adjustable search radius), Hotspots map (persistent marker detail
-  sheet with full species checklist), Species search, Species detail
-  (photo gallery + attribution, capped sightings feed), Life List,
-  Settings
+  adjustable search radius + date range), Hotspots map (clustered
+  markers, persistent per-marker detail sheet with a date-scoped species
+  checklist), Species search, Species detail (photo gallery + hero
+  transition + attribution, capped sightings feed), Life List, Settings
 - `lib/services/` — eBird API client, eBird taxonomy client (family
   grouping + species search index), device location, local storage,
   species photo/media lookup (Wikimedia Commons, with attribution),
@@ -38,6 +38,8 @@ self-serve — see Phase 4).
   thumbnail, hotspot detail sheet, loading skeletons) used across
   screens
 - `lib/utils/` — small helpers (relative time formatting)
+- `test/services/` — unit tests for the eBird client, settings
+  persistence, and life list storage
 - `docs/design-principles.md` — living reference for interaction
   patterns (prefer native Material 3 components, mirror established
   consumer-app patterns, minimize cognitive load)
@@ -73,9 +75,9 @@ free) at:
 
 https://ebird.org/api/keygen
 
-Paste it into the app itself on first launch (Settings) — no code
-changes needed. Each contributor should use their own key rather than
-sharing one.
+Paste it into the app itself on first launch — the app links straight
+to that page for you, no code changes needed. Each contributor should
+use their own key rather than sharing one.
 
 ### 3. Install packages and run
 
@@ -183,23 +185,41 @@ reasoning each time:
 Implemented:
 - Nearby recent sightings, grouped by taxonomic family with sticky
   section headers in eBird taxonomic order (not alphabetical), an
-  all-species/notable-rare segmented filter, and an adjustable search
-  radius (1–20 km, defaults to a tight 7 km so you start close and
-  expand outward)
+  all-species/notable-rare segmented filter, and two independent
+  filters: search radius (1–20 km, defaults to a tight 7 km so you start
+  close and expand outward) and how far back to look (1–30 days,
+  defaults to 7)
 - Species search across the full eBird taxonomy (10,000+ species by
-  common name) — not limited to what's shown up nearby recently
-- Nearby hotspots map (OpenStreetMap, no Google Maps key needed), with a
-  persistent bottom sheet per marker that expands to show that
-  location's full all-time species checklist
+  common name — scientific name is shown but not searched, since it was
+  pulling in unrelated species that happen to share a Latin epithet) —
+  not limited to what's shown up nearby recently
+- Nearby hotspots map (OpenStreetMap, no Google Maps key needed, proper
+  "© OpenStreetMap contributors" attribution shown on the map itself),
+  with clustering so dense urban areas collapse into a legible count
+  badge instead of an overlapping pile of pins, on-brand marker styling,
+  and a "recenter on me" control. Its own search radius and species
+  search entry point live in the map's AppBar, independent from the
+  sightings list's. Tapping a marker opens a bottom sheet — drag it up
+  and it expands to nearly full height, showing that location's species
+  seen within the same shared date range as the sightings list (with the
+  all-time species count kept as secondary context, not the headline)
 - Species detail page — collapsing hero photo (swipeable gallery with
   photographer attribution when Wikimedia Commons has more than one
-  image for a species), serif/sans typographic hierarchy, Wikipedia
-  summary, and a capped/expandable feed of recent local sightings
+  image for a species) that animates in from the thumbnail you tapped
+  rather than cutting straight to it, serif/sans typographic hierarchy,
+  Wikipedia summary, and a capped/expandable feed of recent local
+  sightings
 - **My Life List** — mark any species as seen (count, location, date)
-  from its detail page; view/remove entries in the Life List tab. Stored
-  locally on-device only — nothing is sent to eBird yet (see roadmap
-  below)
-- Local eBird API key storage, no account/login required
+  from its detail page, with a small on-brand animation on the button
+  when you do; view/remove entries in the Life List tab. Stored locally
+  on-device only — nothing is sent to eBird yet (see roadmap below)
+- Local eBird API key storage, no account/login required — first launch
+  walks you straight to eBird's free key-request page rather than just
+  telling you to go find one yourself
+- Settings: light/dark/system theme, a miles/kilometers display toggle
+  (distance is always stored and sent to eBird in km — miles is a
+  display-only conversion), and an About section crediting eBird,
+  Wikipedia/Wikimedia Commons, and OpenStreetMap as data sources
 - Design tokens (`lib/theme/`) implementing `brand.md`'s palette and
   type scale, with real light/dark support (system-following by default,
   manual override available), and an accessibility pass on top of it
@@ -212,6 +232,9 @@ Implemented:
   `flutter_native_splash`) and adaptive launcher icon — Common Loon
   brand mark on cream in both light and dark system modes (app UI dark
   theme is unchanged)
+- A first real unit-test baseline (`test/services/`) covering the eBird
+  client, settings persistence, and life list storage — no more relying
+  solely on manual on-device testing to catch a regression
 
 ### The life list roadmap
 
