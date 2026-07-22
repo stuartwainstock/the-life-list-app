@@ -33,9 +33,22 @@ class EbirdService {
 
   final String apiKey;
 
-  EbirdService(this.apiKey);
+  /// Optional inject for unit tests (`package:http/testing.dart`). Production
+  /// callers omit this and use the package's top-level [http.get].
+  final http.Client? _httpClient;
+
+  EbirdService(this.apiKey, {http.Client? httpClient})
+      : _httpClient = httpClient;
 
   Map<String, String> get _headers => {'X-eBirdApiToken': apiKey};
+
+  Future<http.Response> _get(Uri uri) {
+    final client = _httpClient;
+    if (client != null) {
+      return client.get(uri, headers: _headers);
+    }
+    return http.get(uri, headers: _headers);
+  }
 
   /// Recent sightings of all species within [distKm] of (lat, lng).
   /// distKm max is 50 per the eBird API.
@@ -53,7 +66,7 @@ class EbirdService {
         'back': '$back',
       },
     );
-    final res = await http.get(uri, headers: _headers);
+    final res = await _get(uri);
     _checkStatus(res);
     final list = jsonDecode(res.body) as List;
     return list
@@ -76,7 +89,7 @@ class EbirdService {
         'back': '$back',
       },
     );
-    final res = await http.get(uri, headers: _headers);
+    final res = await _get(uri);
     _checkStatus(res);
     final list = jsonDecode(res.body) as List;
     return list
@@ -101,7 +114,7 @@ class EbirdService {
         'back': '$back',
       },
     );
-    final res = await http.get(uri, headers: _headers);
+    final res = await _get(uri);
     _checkStatus(res);
     final list = jsonDecode(res.body) as List;
     return list
@@ -123,7 +136,7 @@ class EbirdService {
         'fmt': 'json',
       },
     );
-    final res = await http.get(uri, headers: _headers);
+    final res = await _get(uri);
     _checkStatus(res);
     final list = jsonDecode(res.body) as List;
     return list.map((e) => Hotspot.fromJson(e as Map<String, dynamic>)).toList();
@@ -144,7 +157,7 @@ class EbirdService {
         'fmt': 'json',
       },
     );
-    final res = await http.get(uri, headers: _headers);
+    final res = await _get(uri);
     _checkStatus(res);
     final list = jsonDecode(res.body) as List;
     return list
@@ -160,7 +173,7 @@ class EbirdService {
     final uri = Uri.parse('$_baseUrl/product/spplist/$locId').replace(
       queryParameters: {'fmt': 'json'},
     );
-    final res = await http.get(uri, headers: _headers);
+    final res = await _get(uri);
     _checkStatus(res);
     final list = jsonDecode(res.body) as List;
     return list.map((e) => e.toString()).toList();

@@ -461,7 +461,7 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
                 ),
                 // OSM tile usage policy requires visible attribution.
                 SimpleAttributionWidget(
-                  source: const Text('OpenStreetMap contributors'),
+                  source: const Text('© OpenStreetMap contributors'),
                   alignment: Alignment.bottomLeft,
                   onTap: () => launchUrl(
                     Uri.parse('https://www.openstreetmap.org/copyright'),

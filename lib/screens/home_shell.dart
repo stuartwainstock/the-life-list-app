@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/settings_service.dart';
+import '../theme/app_spacing.dart';
 import '../theme/app_theme.dart';
 import 'sightings_list_screen.dart';
 import 'hotspots_map_screen.dart';
@@ -19,6 +21,8 @@ import 'settings_screen.dart';
 ///
 /// [themeMode] / [onThemeModeChanged] are owned by [TheLifeListApp] so
 /// [MaterialApp] can rebuild; Settings only edits the preference.
+///
+/// First-run gate polish: `docs/tickets/first-run-onboarding.md`.
 class HomeShell extends StatefulWidget {
   final ThemeMode themeMode;
   final ValueChanged<ThemeMode> onThemeModeChanged;
@@ -34,6 +38,8 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
+  static final _keygenUri = Uri.parse('https://ebird.org/api/keygen');
+
   final _settings = SettingsService();
   String? _apiKey;
   bool _checked = false;
@@ -53,6 +59,10 @@ class _HomeShellState extends State<HomeShell> {
     });
   }
 
+  Future<void> _openKeygen() async {
+    await launchUrl(_keygenUri, mode: LaunchMode.externalApplication);
+  }
+
   SettingsScreen _settingsPage() => SettingsScreen(
         onApiKeySaved: _refreshKey,
         themeMode: widget.themeMode,
@@ -68,6 +78,9 @@ class _HomeShellState extends State<HomeShell> {
     // First-run: force key setup before any eBird calls. Avoids a cascade
     // of 401s on every tab.
     if (_apiKey == null || _apiKey!.isEmpty) {
+      final theme = Theme.of(context);
+      final scheme = theme.colorScheme;
+
       return Scaffold(
         appBar: AppBar(
           title: const Text('Welcome to The Life List'),
@@ -75,17 +88,51 @@ class _HomeShellState extends State<HomeShell> {
         ),
         body: Center(
           child: Padding(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(AppSpacing.xl),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.flutter_dash, size: 56),
-                const SizedBox(height: 16),
-                const Text(
-                  'The Life List needs a free eBird API key to fetch real sighting data.',
+                // App loon mark — not Flutter's dash placeholder.
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  child: Image.asset(
+                    'assets/icon/loon_icon_flat.png',
+                    width: 88,
+                    height: 88,
+                    semanticLabel: 'The Life List',
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                Text(
+                  'The Life List',
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: scheme.onSurface,
+                  ),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  'Needs a free eBird API key to fetch real sighting data.',
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                TextButton.icon(
+                  onPressed: _openKeygen,
+                  icon: Icon(
+                    Icons.open_in_new,
+                    size: 18,
+                    color: scheme.primary,
+                  ),
+                  label: Text(
+                    "Don't have a key yet? Get one free from eBird",
+                    style: TextStyle(color: scheme.primary),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
                 FilledButton(
                   onPressed: () async {
                     await Navigator.of(context).push(MaterialPageRoute(

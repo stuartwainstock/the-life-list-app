@@ -3,6 +3,7 @@
 ## Active
 
 - [ ] **Extract shared AppBar component** - one shared widget builds all four top-level screens' app bars instead of each hand-rolling its own, so future action/icon drift can't happen silently — see `docs/tickets/shared-appbar-component.md`
+- [ ] **Live TalkBack verification pass** - actual on-device screen-reader walkthrough (hotspot sheet drag gesture, map markers, hero gallery), distinct from the prior code-level accessibility pass — see `docs/tickets/talkback-verification-pass.md`
 
 ## Waiting On
 
@@ -15,6 +16,9 @@
 
 ## Done
 
+- [x] ~~Test coverage baseline~~ (2026-07-22)
+- [x] ~~First-run onboarding fix~~ (2026-07-22)
+- [x] ~~OSM attribution wording fix~~ (2026-07-22)
 - [x] ~~Life List celebration animation~~ (2026-07-22)
 - [x] ~~Species photo hero transition~~ (2026-07-22)
 - [x] ~~Hotspot sheet polish~~ (2026-07-22)
