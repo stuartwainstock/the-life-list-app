@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// On-device settings: eBird API key, appearance, and sightings search radius.
+/// On-device settings: eBird API key, appearance, and sightings filters
+/// (search radius + how far back in time).
 ///
 /// ## Why not .env / dart-define for the key?
 /// Keys are per-user and must never ship in the repo or binary. The user
@@ -11,11 +12,17 @@ class SettingsService {
   static const _apiKeyPref = 'ebird_api_key';
   static const _themeModePref = 'theme_mode';
   static const _sightingsRadiusKmPref = 'sightings_radius_km';
+  static const _sightingsBackDaysPref = 'sightings_back_days';
 
   /// First-launch default for nearby sightings (see radius-toggle ticket).
   static const defaultSightingsRadiusKm = 7;
   static const minSightingsRadiusKm = 1;
   static const maxSightingsRadiusKm = 20;
+
+  /// How far back to request sightings (eBird `back` param; API max 30).
+  static const defaultSightingsBackDays = 7;
+  static const minSightingsBackDays = 1;
+  static const maxSightingsBackDays = 30;
 
   Future<String?> getApiKey() async {
     final prefs = await SharedPreferences.getInstance();
@@ -58,6 +65,24 @@ class SettingsService {
     await prefs.setInt(
       _sightingsRadiusKmPref,
       km.clamp(minSightingsRadiusKm, maxSightingsRadiusKm),
+    );
+  }
+
+  /// Sightings lookback in whole days (eBird `back`). Defaults to
+  /// [defaultSightingsBackDays]; clamped to
+  /// [minSightingsBackDays]–[maxSightingsBackDays].
+  Future<int> getSightingsBackDays() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getInt(_sightingsBackDaysPref);
+    if (raw == null) return defaultSightingsBackDays;
+    return raw.clamp(minSightingsBackDays, maxSightingsBackDays);
+  }
+
+  Future<void> setSightingsBackDays(int days) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(
+      _sightingsBackDaysPref,
+      days.clamp(minSightingsBackDays, maxSightingsBackDays),
     );
   }
 

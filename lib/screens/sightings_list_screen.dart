@@ -83,6 +83,7 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
   List<Observation> _notable = [];
   bool _showNotableOnly = false;
   int _distKm = SettingsService.defaultSightingsRadiusKm;
+  int _backDays = SettingsService.defaultSightingsBackDays;
 
   /// Null while taxonomy is loading/unavailable — triggers flat-list fallback.
   Map<String, TaxonomyEntry>? _taxonomyLookup;
@@ -96,9 +97,15 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
   }
 
   Future<void> _init() async {
-    final radius = await _settings.getSightingsRadiusKm();
+    final results = await Future.wait([
+      _settings.getSightingsRadiusKm(),
+      _settings.getSightingsBackDays(),
+    ]);
     if (!mounted) return;
-    setState(() => _distKm = radius);
+    setState(() {
+      _distKm = results[0];
+      _backDays = results[1];
+    });
     await Future.wait([_load(), _loadTaxonomy()]);
   }
 
@@ -121,7 +128,7 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
   }
 
   Future<void> _load({bool keepContent = false}) async {
-    // Skeleton for initial load / radius change when nothing to show yet;
+    // Skeleton for initial load / filter change when nothing to show yet;
     // pull-to-refresh keeps rows (loading-states-polish).
     setState(() {
       if (!keepContent && !_hasListContent) _loading = true;
@@ -129,13 +136,15 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
       _showingStale = false;
     });
 
-    // Instant paint from last success when radius still matches (before GPS).
-    // If radius changed, drop the previous radius's rows so we never flash
-    // the wrong cache key (offline-caching acceptance).
+    // Instant paint from last success when radius + lookback still match
+    // (before GPS). If either filter changed, drop previous rows so we
+    // never flash the wrong cache key (offline-caching acceptance).
     if (!keepContent) {
       final last = await _listCache.readLastSightings();
       if (!mounted) return;
-      if (last != null && last.distKm == _distKm) {
+      if (last != null &&
+          last.distKm == _distKm &&
+          last.backDays == _backDays) {
         setState(() {
           _applySightingsCache(
             all: last.all,
@@ -160,18 +169,20 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
       final pos = await _locationService.getCurrentPosition();
       if (!mounted) return;
 
-      // Param-keyed cache for this GPS + radius (may refine "last" payload).
+      // Param-keyed cache for this GPS + radius + lookback.
       final cachedAll = await _listCache.readObservations(
         notable: false,
         lat: pos.latitude,
         lng: pos.longitude,
         distKm: _distKm,
+        backDays: _backDays,
       );
       final cachedNotable = await _listCache.readObservations(
         notable: true,
         lat: pos.latitude,
         lng: pos.longitude,
         distKm: _distKm,
+        backDays: _backDays,
       );
       if (!mounted) return;
       if (cachedAll != null) {
@@ -198,11 +209,13 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
           lat: pos.latitude,
           lng: pos.longitude,
           distKm: _distKm,
+          back: _backDays,
         ),
         _ebird.nearbyNotableObservations(
           lat: pos.latitude,
           lng: pos.longitude,
           distKm: _distKm,
+          back: _backDays,
         ),
       ]);
       if (!mounted) return;
@@ -217,6 +230,7 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
           lat: pos.latitude,
           lng: pos.longitude,
           distKm: _distKm,
+          backDays: _backDays,
           items: all,
           fetchedAt: fetchedAt,
         ),
@@ -225,6 +239,7 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
           lat: pos.latitude,
           lng: pos.longitude,
           distKm: _distKm,
+          backDays: _backDays,
           items: notableRaw,
           fetchedAt: fetchedAt,
         ),
@@ -234,6 +249,7 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
             lat: pos.latitude,
             lng: pos.longitude,
             distKm: _distKm,
+            backDays: _backDays,
             all: all,
             notable: notableRaw,
           ),
@@ -269,13 +285,20 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
     }
   }
 
-  void _openRadiusSheet() {
+  void _openFiltersSheet() {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
       builder: (sheetContext) {
         final theme = Theme.of(sheetContext);
         final scheme = theme.colorScheme;
+        final sliderTheme = SliderTheme.of(sheetContext).copyWith(
+          activeTrackColor: scheme.primary,
+          thumbColor: scheme.primary,
+          overlayColor: scheme.primary.withValues(alpha: 0.12),
+          inactiveTrackColor: scheme.primary.withValues(alpha: 0.24),
+          valueIndicatorColor: scheme.primary,
+        );
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(
@@ -299,14 +322,7 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
                     ),
                     const SizedBox(height: AppSpacing.md),
                     SliderTheme(
-                      data: SliderTheme.of(context).copyWith(
-                        activeTrackColor: scheme.primary,
-                        thumbColor: scheme.primary,
-                        overlayColor: scheme.primary.withValues(alpha: 0.12),
-                        inactiveTrackColor:
-                            scheme.primary.withValues(alpha: 0.24),
-                        valueIndicatorColor: scheme.primary,
-                      ),
+                      data: sliderTheme,
                       child: Slider(
                         value: _distKm.toDouble(),
                         min: SettingsService.minSightingsRadiusKm.toDouble(),
@@ -329,6 +345,43 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
                     ),
                     Text(
                       '1–${SettingsService.maxSightingsRadiusKm} km',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                    Text(
+                      _backDays == 1
+                          ? 'Showing sightings from the last 1 day'
+                          : 'Showing sightings from the last $_backDays days',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: scheme.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    SliderTheme(
+                      data: sliderTheme,
+                      child: Slider(
+                        value: _backDays.toDouble(),
+                        min: SettingsService.minSightingsBackDays.toDouble(),
+                        max: SettingsService.maxSightingsBackDays.toDouble(),
+                        divisions: SettingsService.maxSightingsBackDays -
+                            SettingsService.minSightingsBackDays,
+                        label: '$_backDays days',
+                        onChanged: (value) {
+                          final days = value.round();
+                          setSheetState(() {});
+                          setState(() => _backDays = days);
+                        },
+                        onChangeEnd: (value) async {
+                          final days = value.round();
+                          await _settings.setSightingsBackDays(days);
+                          if (!mounted) return;
+                          _load();
+                        },
+                      ),
+                    ),
+                    Text(
+                      '1–${SettingsService.maxSightingsBackDays} days',
                       style: theme.textTheme.bodySmall,
                     ),
                   ],
@@ -405,8 +458,8 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.tune),
-            tooltip: 'Search radius',
-            onPressed: _openRadiusSheet,
+            tooltip: 'Filters',
+            onPressed: _openFiltersSheet,
           ),
           IconButton(
             icon: const Icon(Icons.refresh),

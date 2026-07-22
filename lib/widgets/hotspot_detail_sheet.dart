@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../models/hotspot.dart';
+import '../models/observation.dart';
 import '../screens/species_detail_screen.dart';
 import '../services/ebird_service.dart';
-import '../services/ebird_taxonomy_service.dart';
+import '../services/settings_service.dart';
 import '../theme/app_spacing.dart';
 import 'skeleton.dart';
 import 'species_thumbnail.dart';
@@ -11,12 +12,14 @@ import 'species_thumbnail.dart';
 /// Persistent (non-modal) hotspot sheet — peek header, drag up for species.
 ///
 /// Anchored in the map [Stack] above the shell [NavigationBar]. Collapsed
-/// state shows name + all-time count; expanded reveals the checklist from
-/// `GET /product/spplist/{locId}`, resolved via [EbirdTaxonomyService].
-/// Sorted A–Z by common name (checklist scan, not live-feed taxonomic order).
+/// state shows name + recent species count (shared sightings lookback) with
+/// all-time as secondary context. Expanded checklist comes from
+/// `GET /data/obs/{locId}/recent`, sorted A–Z by common name (checklist
+/// scan, not live-feed taxonomic order).
 ///
 /// Tickets: `docs/tickets/hotspot-marker-bottom-sheet.md`,
-/// `docs/tickets/hotspot-species-list.md`
+/// `docs/tickets/hotspot-species-list.md`,
+/// `docs/tickets/hotspot-checklist-date-range.md`
 class HotspotDetailSheet extends StatefulWidget {
   final Hotspot hotspot;
   final String apiKey;
@@ -42,11 +45,12 @@ class HotspotDetailSheet extends StatefulWidget {
 
 class _HotspotDetailSheetState extends State<HotspotDetailSheet> {
   late final EbirdService _ebird = EbirdService(widget.apiKey);
-  final _taxonomy = EbirdTaxonomyService();
+  final _settings = SettingsService();
 
   bool _loadingSpecies = true;
   String? _speciesError;
-  List<TaxonomyEntry> _species = const [];
+  List<Observation> _species = const [];
+  int _backDays = SettingsService.defaultSightingsBackDays;
 
   @override
   void initState() {
@@ -69,22 +73,28 @@ class _HotspotDetailSheetState extends State<HotspotDetailSheet> {
       _species = const [];
     });
     try {
-      final results = await Future.wait([
-        _ebird.hotspotSpeciesList(locId: widget.hotspot.locId),
-        _taxonomy.getLookup(widget.apiKey),
-      ]);
+      final backDays = await _settings.getSightingsBackDays();
       if (!mounted) return;
-      final codes = results[0] as List<String>;
-      final lookup = results[1] as Map<String, TaxonomyEntry>?;
-      final resolved = <TaxonomyEntry>[];
-      if (lookup != null) {
-        for (final code in codes) {
-          final entry = lookup[code];
-          if (entry == null || entry.comName.trim().isEmpty) continue;
-          resolved.add(entry);
+      setState(() => _backDays = backDays);
+
+      final observations = await _ebird.recentObservationsAtLocation(
+        locId: widget.hotspot.locId,
+        back: backDays,
+      );
+      if (!mounted) return;
+
+      // One row per species — keep the most recent observation if dupes.
+      final best = <String, Observation>{};
+      for (final obs in observations) {
+        if (obs.speciesCode.isEmpty || obs.comName.trim().isEmpty) continue;
+        final prev = best[obs.speciesCode];
+        if (prev == null || obs.obsDt.isAfter(prev.obsDt)) {
+          best[obs.speciesCode] = obs;
         }
       }
-      resolved.sort((a, b) => a.comName.compareTo(b.comName));
+      final resolved = best.values.toList()
+        ..sort((a, b) => a.comName.compareTo(b.comName));
+
       setState(() {
         _species = resolved;
         _loadingSpecies = false;
@@ -98,14 +108,14 @@ class _HotspotDetailSheetState extends State<HotspotDetailSheet> {
     }
   }
 
-  void _openSpecies(TaxonomyEntry entry) {
+  void _openSpecies(Observation obs) {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => SpeciesDetailScreen(
           apiKey: widget.apiKey,
-          speciesCode: entry.speciesCode,
-          comName: entry.comName,
-          sciName: entry.sciName,
+          speciesCode: obs.speciesCode,
+          comName: obs.comName,
+          sciName: obs.sciName,
           lat: widget.lat,
           lng: widget.lng,
         ),
@@ -113,10 +123,24 @@ class _HotspotDetailSheetState extends State<HotspotDetailSheet> {
     );
   }
 
+  String get _recentCountLabel {
+    final n = _species.length;
+    final days = _backDays;
+    if (days == 1) {
+      return n == 1
+          ? '1 species seen in the last 1 day'
+          : '$n species seen in the last 1 day';
+    }
+    return n == 1
+        ? '1 species seen in the last $days days'
+        : '$n species seen in the last $days days';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final allTime = widget.hotspot.numSpeciesAllTime;
 
     return NotificationListener<DraggableScrollableNotification>(
       onNotification: (notification) {
@@ -183,10 +207,36 @@ class _HotspotDetailSheetState extends State<HotspotDetailSheet> {
                   widget.hotspot.locName,
                   style: theme.textTheme.titleLarge,
                 ),
-                if (widget.hotspot.numSpeciesAllTime != null) ...[
-                  const SizedBox(height: AppSpacing.sm),
+                const SizedBox(height: AppSpacing.sm),
+                if (_loadingSpecies)
                   Text(
-                    '${widget.hotspot.numSpeciesAllTime} species recorded all-time',
+                    _backDays == 1
+                        ? 'Loading species from the last 1 day…'
+                        : 'Loading species from the last $_backDays days…',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  )
+                else if (_speciesError == null)
+                  Text(
+                    _recentCountLabel,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: scheme.onSurface,
+                    ),
+                  )
+                else
+                  Text(
+                    _backDays == 1
+                        ? 'Species from the last 1 day'
+                        : 'Species from the last $_backDays days',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                if (allTime != null) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    '$allTime recorded all-time',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: scheme.onSurfaceVariant,
                     ),
@@ -258,7 +308,9 @@ class _HotspotDetailSheetState extends State<HotspotDetailSheet> {
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
                     child: Text(
-                      'No species recorded for this hotspot yet.',
+                      _backDays == 1
+                          ? 'No species seen here in the last 1 day.'
+                          : 'No species seen here in the last $_backDays days.',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: scheme.onSurfaceVariant,
                       ),
@@ -266,9 +318,9 @@ class _HotspotDetailSheetState extends State<HotspotDetailSheet> {
                   )
                 else
                   ..._species.map(
-                    (entry) => _HotspotSpeciesRow(
-                      entry: entry,
-                      onTap: () => _openSpecies(entry),
+                    (obs) => _HotspotSpeciesRow(
+                      observation: obs,
+                      onTap: () => _openSpecies(obs),
                     ),
                   ),
               ],
@@ -282,11 +334,11 @@ class _HotspotDetailSheetState extends State<HotspotDetailSheet> {
 
 /// Matches [SightingListRow] visual language: thumb + Newsreader name + muted sci.
 class _HotspotSpeciesRow extends StatelessWidget {
-  final TaxonomyEntry entry;
+  final Observation observation;
   final VoidCallback onTap;
 
   const _HotspotSpeciesRow({
-    required this.entry,
+    required this.observation,
     required this.onTap,
   });
 
@@ -294,6 +346,7 @@ class _HotspotSpeciesRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final obs = observation;
 
     return InkWell(
       onTap: onTap,
@@ -303,9 +356,9 @@ class _HotspotSpeciesRow extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SpeciesThumbnail(
-              key: ValueKey('hotspot-thumb-${entry.speciesCode}'),
-              comName: entry.comName,
-              sciName: entry.sciName,
+              key: ValueKey('hotspot-thumb-${obs.speciesCode}'),
+              comName: obs.comName,
+              sciName: obs.sciName,
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
@@ -313,16 +366,16 @@ class _HotspotSpeciesRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    entry.comName,
+                    obs.comName,
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w700,
                       height: 1.2,
                     ),
                   ),
-                  if (entry.sciName.trim().isNotEmpty) ...[
+                  if (obs.sciName.trim().isNotEmpty) ...[
                     const SizedBox(height: AppSpacing.xs),
                     Text(
-                      entry.sciName,
+                      obs.sciName,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: scheme.onSurfaceVariant,
                         fontStyle: FontStyle.italic,

@@ -129,6 +129,29 @@ class EbirdService {
     return list.map((e) => Hotspot.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  /// Recent observations at a specific hotspot / location.
+  ///
+  /// `GET /data/obs/{locId}/recent` — date-scoped via [back] (1–30 days).
+  /// Prefer this over [hotspotSpeciesList] when aligning with the shared
+  /// sightings lookback (`docs/tickets/hotspot-checklist-date-range.md`).
+  Future<List<Observation>> recentObservationsAtLocation({
+    required String locId,
+    int back = 7,
+  }) async {
+    final uri = Uri.parse('$_baseUrl/data/obs/$locId/recent').replace(
+      queryParameters: {
+        'back': '$back',
+        'fmt': 'json',
+      },
+    );
+    final res = await http.get(uri, headers: _headers);
+    _checkStatus(res);
+    final list = jsonDecode(res.body) as List;
+    return list
+        .map((e) => Observation.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   /// All-time species codes recorded at a hotspot / location.
   ///
   /// `GET /product/spplist/{locId}` — codes only; resolve names via

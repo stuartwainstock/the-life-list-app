@@ -13,6 +13,8 @@
 
 ## Done
 
+- [x] ~~Hotspot checklist: scope to shared date range~~ (2026-07-22)
+- [x] ~~Sightings filter: date-range slider~~ (2026-07-22)
 - [x] ~~Hotspot map: marker clustering~~ (2026-07-21)
 - [x] ~~Hotspot map: on-brand markers + recenter control~~ (2026-07-21)
 - [x] ~~App footprint: build format + cache limits~~ (2026-07-21)

@@ -13,9 +13,10 @@ import 'list_cache_stub.dart'
 ///
 /// ## Keys
 /// Files are keyed by call kind + lat/lng (3 decimal places ≈ 110m) +
-/// distKm so a 7km Boston cache isn't served for a 20km query or a
-/// different city. A parallel "last success" file lets screens paint
-/// before GPS resolves when the stored radius still matches.
+/// distKm (+ backDays for sightings) so a 7km / 7-day Boston cache isn't
+/// served for a 20km or 30-day query or a different city. A parallel
+/// "last success" file lets screens paint before GPS resolves when the
+/// stored radius and lookback still match.
 ///
 /// ## Web
 /// Session has no durable disk cache (stub); behavior falls back to
@@ -32,12 +33,14 @@ class EbirdListCache {
     required double lat,
     required double lng,
     required int distKm,
+    required int backDays,
   }) async {
     final path = await _keyedPath(
       kind: notable ? 'obs_notable' : 'obs_all',
       lat: lat,
       lng: lng,
       distKm: distKm,
+      backDays: backDays,
     );
     if (path == null) return null;
     return _readObservationsFile(path);
@@ -48,6 +51,7 @@ class EbirdListCache {
     required double lat,
     required double lng,
     required int distKm,
+    required int backDays,
     required List<Observation> items,
     DateTime? fetchedAt,
   }) async {
@@ -56,6 +60,7 @@ class EbirdListCache {
       lat: lat,
       lng: lng,
       distKm: distKm,
+      backDays: backDays,
     );
     if (path == null) return;
     await _writeObservationsFile(
@@ -65,6 +70,7 @@ class EbirdListCache {
         lat: lat,
         lng: lng,
         distKm: distKm,
+        backDays: backDays,
         items: items,
       ),
     );
@@ -173,6 +179,7 @@ class EbirdListCache {
     required double lat,
     required double lng,
     required int distKm,
+    int? backDays,
   }) async {
     final dir = await _cacheDir();
     if (dir == null) return null;
@@ -181,7 +188,8 @@ class EbirdListCache {
     // Sanitize for filenames (negative coords).
     final safeLat = latKey.replaceAll('-', 'm').replaceAll('.', 'p');
     final safeLng = lngKey.replaceAll('-', 'm').replaceAll('.', 'p');
-    return '$dir/${kind}_${safeLat}_${safeLng}_${distKm}km.json';
+    final backSuffix = backDays == null ? '' : '_${backDays}d';
+    return '$dir/${kind}_${safeLat}_${safeLng}_${distKm}km$backSuffix.json';
   }
 
   Future<CachedObservations?> _readObservationsFile(String path) async {
@@ -227,6 +235,7 @@ class CachedObservations {
   final double lat;
   final double lng;
   final int distKm;
+  final int backDays;
   final List<Observation> items;
 
   CachedObservations({
@@ -234,6 +243,7 @@ class CachedObservations {
     required this.lat,
     required this.lng,
     required this.distKm,
+    required this.backDays,
     required this.items,
   });
 
@@ -242,6 +252,7 @@ class CachedObservations {
         'lat': lat,
         'lng': lng,
         'distKm': distKm,
+        'backDays': backDays,
         'items': items.map((e) => e.toJson()).toList(),
       };
 
@@ -253,6 +264,9 @@ class CachedObservations {
       lat: (json['lat'] as num?)?.toDouble() ?? 0,
       lng: (json['lng'] as num?)?.toDouble() ?? 0,
       distKm: (json['distKm'] as num?)?.toInt() ?? 0,
+      // Pre–date-range-filter caches omit this; treat as the historical
+      // all-species default of 7 days.
+      backDays: (json['backDays'] as num?)?.toInt() ?? 7,
       items: rawItems
           .map((e) => Observation.fromJson(e as Map<String, dynamic>))
           .toList(),
@@ -266,6 +280,7 @@ class CachedSightingsBundle {
   final double lat;
   final double lng;
   final int distKm;
+  final int backDays;
   final List<Observation> all;
   final List<Observation> notable;
 
@@ -274,6 +289,7 @@ class CachedSightingsBundle {
     required this.lat,
     required this.lng,
     required this.distKm,
+    required this.backDays,
     required this.all,
     required this.notable,
   });
@@ -283,6 +299,7 @@ class CachedSightingsBundle {
         'lat': lat,
         'lng': lng,
         'distKm': distKm,
+        'backDays': backDays,
         'all': all.map((e) => e.toJson()).toList(),
         'notable': notable.map((e) => e.toJson()).toList(),
       };
@@ -296,6 +313,7 @@ class CachedSightingsBundle {
       lat: (json['lat'] as num?)?.toDouble() ?? 0,
       lng: (json['lng'] as num?)?.toDouble() ?? 0,
       distKm: (json['distKm'] as num?)?.toInt() ?? 0,
+      backDays: (json['backDays'] as num?)?.toInt() ?? 7,
       all: rawAll
           .map((e) => Observation.fromJson(e as Map<String, dynamic>))
           .toList(),
