@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
 import 'package:latlong2/latlong.dart';
 import '../models/hotspot.dart';
 import '../services/ebird_list_cache.dart';
@@ -21,7 +22,8 @@ import '../widgets/skeleton.dart';
 ///
 /// Marker detail uses a persistent peek sheet ([HotspotDetailSheet]) inside
 /// this screen's body — never `showModalBottomSheet`, so it stays above the
-/// shell nav and the map remains interactive.
+/// shell nav and the map remains interactive. Dense hotspot pins cluster via
+/// [MarkerClusterLayerWidget] (`docs/tickets/hotspot-marker-clustering.md`).
 class HotspotsMapScreen extends StatefulWidget {
   final String apiKey;
   const HotspotsMapScreen({super.key, required this.apiKey});
@@ -34,9 +36,11 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
   final _locationService = LocationService();
   final _listCache = EbirdListCache();
   late final EbirdService _ebird = EbirdService(widget.apiKey);
+  final _mapController = MapController();
 
   /// Matches [EbirdService.nearbyHotspots] default.
   static const _distKm = 25;
+  static const _defaultZoom = 11.0;
 
   bool _loading = true;
   String? _error;
@@ -50,6 +54,58 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _mapController.dispose();
+    super.dispose();
+  }
+
+  void _recenter() {
+    final center = _center;
+    if (center == null) return;
+    _mapController.move(center, _defaultZoom);
+  }
+
+  void _onHotspotMarkerTap(Marker marker) {
+    final key = marker.key;
+    if (key is! ValueKey<String>) return;
+    Hotspot? match;
+    for (final h in _hotspots) {
+      if (h.locId == key.value) {
+        match = h;
+        break;
+      }
+    }
+    if (match == null) return;
+    setState(() => _selected = match);
+  }
+
+  List<Marker> _hotspotMarkers(ColorScheme scheme) {
+    return [
+      for (final h in _hotspots)
+        Marker(
+          key: ValueKey(h.locId),
+          point: LatLng(h.lat, h.lng),
+          width: 48,
+          height: 48,
+          child: Center(
+            child: Icon(
+              _selected?.locId == h.locId
+                  ? Icons.location_on
+                  : Icons.location_on_outlined,
+              color: _selected?.locId == h.locId
+                  ? scheme.primary
+                  : scheme.onSurfaceVariant,
+              size: _selected?.locId == h.locId ? 36 : 28,
+              semanticLabel: _selected?.locId == h.locId
+                  ? 'Selected hotspot ${h.locName}'
+                  : 'Hotspot ${h.locName}',
+            ),
+          ),
+        ),
+    ];
   }
 
   Future<void> _load() async {
@@ -193,9 +249,10 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
     return Stack(
       children: [
         FlutterMap(
+          mapController: _mapController,
           options: MapOptions(
             initialCenter: _center!,
-            initialZoom: 11,
+            initialZoom: _defaultZoom,
             // Empty-map tap dismisses the persistent sheet (not modal).
             onTap: (_, __) {
               if (_selected != null) {
@@ -216,44 +273,55 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
             ),
             MarkerLayer(
               markers: [
+                // Keep "you are here" outside clustering so it never
+                // collapses into a hotspot badge.
                 Marker(
                   point: _center!,
-                  width: 30,
-                  height: 30,
-                  child: const Icon(Icons.my_location, color: Colors.blue),
+                  width: 28,
+                  height: 28,
+                  alignment: Alignment.center,
+                  child: const _UserLocationDot(),
                 ),
-                ..._hotspots.map(
-                  (h) {
-                    final selected = _selected?.locId == h.locId;
-                    final scheme = Theme.of(context).colorScheme;
-                    // Selection uses size + filled vs outlined icon — not
-                    // color alone (WCAG 1.4.1). Hit area stays ≥48dp.
-                    return Marker(
-                      point: LatLng(h.lat, h.lng),
-                      width: 48,
-                      height: 48,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () => setState(() => _selected = h),
-                        child: Center(
-                          child: Icon(
-                            selected
-                                ? Icons.location_on
-                                : Icons.location_on_outlined,
-                            color: selected
-                                ? scheme.primary
-                                : scheme.error,
-                            size: selected ? 36 : 28,
-                            semanticLabel: selected
-                                ? 'Selected hotspot ${h.locName}'
-                                : 'Hotspot ${h.locName}',
+              ],
+            ),
+            MarkerClusterLayerWidget(
+              options: MarkerClusterLayerOptions(
+                maxClusterRadius: 80,
+                size: const Size(40, 40),
+                alignment: Alignment.center,
+                padding: const EdgeInsets.all(50),
+                maxZoom: 17,
+                zoomToBoundsOnClick: true,
+                // Don't recenter the camera when opening a hotspot sheet —
+                // the peek sheet already anchors attention.
+                centerMarkerOnClick: false,
+                showPolygon: false,
+                markers: _hotspotMarkers(Theme.of(context).colorScheme),
+                onMarkerTap: _onHotspotMarkerTap,
+                builder: (context, markers) {
+                  final scheme = Theme.of(context).colorScheme;
+                  final theme = Theme.of(context);
+                  return Semantics(
+                    button: true,
+                    label: '${markers.length} hotspots',
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: scheme.primary,
+                      ),
+                      child: Center(
+                        child: Text(
+                          '${markers.length}',
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: scheme.onPrimary,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
-                    );
-                  },
-                ),
-              ],
+                    ),
+                  );
+                },
+              ),
             ),
           ],
         ),
@@ -318,7 +386,54 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
             lng: _center!.longitude,
             onDismiss: () => setState(() => _selected = null),
           ),
+        // Recenter sits above the sheet in z-order so it stays tappable,
+        // and lifts vertically when the peek sheet is open.
+        Positioned(
+          right: AppSpacing.lg,
+          bottom: AppSpacing.lg +
+              (_selected == null
+                  ? 0
+                  : MediaQuery.sizeOf(context).height *
+                      HotspotDetailSheet.peekSize),
+          child: FloatingActionButton.small(
+            heroTag: 'hotspots_recenter',
+            tooltip: 'Recenter map on my location',
+            backgroundColor: Theme.of(context).colorScheme.surface,
+            foregroundColor: Theme.of(context).colorScheme.primary,
+            onPressed: _recenter,
+            child: const Icon(Icons.my_location),
+          ),
+        ),
       ],
+    );
+  }
+}
+
+/// "You are here" — filled dot + ring, not a pin (distinct from hotspots).
+class _UserLocationDot extends StatelessWidget {
+  const _UserLocationDot();
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Semantics(
+      label: 'Your location',
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: primary.withValues(alpha: 0.22),
+          border: Border.all(color: primary, width: 2),
+        ),
+        child: Center(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: primary,
+            ),
+            child: const SizedBox(width: 10, height: 10),
+          ),
+        ),
+      ),
     );
   }
 }

@@ -13,6 +13,8 @@
 
 ## Done
 
+- [x] ~~Hotspot map: marker clustering~~ (2026-07-21)
+- [x] ~~Hotspot map: on-brand markers + recenter control~~ (2026-07-21)
 - [x] ~~App footprint: build format + cache limits~~ (2026-07-21)
 - [x] ~~Splash: cream background in all modes (no separate dark variant)~~ (2026-07-20)
 - [x] ~~Accessibility: quick wins~~ (2026-07-21)
