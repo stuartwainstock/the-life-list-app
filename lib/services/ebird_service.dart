@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/observation.dart';
 import '../models/hotspot.dart';
+import 'api_usage_tracker.dart';
 
 /// Thin client for eBird API 2.0.
 ///
@@ -42,7 +43,8 @@ class EbirdService {
 
   Map<String, String> get _headers => {'X-eBirdApiToken': apiKey};
 
-  Future<http.Response> _get(Uri uri) {
+  Future<http.Response> _get(Uri uri) async {
+    await ApiUsageTracker().recordCall(ApiUsageTracker.providerEbird);
     final client = _httpClient;
     if (client != null) {
       return client.get(uri, headers: _headers);

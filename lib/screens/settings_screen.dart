@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../services/api_usage_tracker.dart';
 import '../services/settings_service.dart';
 import '../theme/app_spacing.dart';
 import '../widgets/branded_app_bar.dart';
@@ -22,9 +23,12 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final _settings = SettingsService();
+  final _usage = ApiUsageTracker();
   final _controller = TextEditingController();
   bool _saved = false;
   DistanceUnit _distanceUnit = DistanceUnit.kilometers;
+  int _ebirdCallsToday = 0;
+  int _xenoCallsToday = 0;
 
   @override
   void initState() {
@@ -34,6 +38,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
     _settings.getDistanceUnit().then((unit) {
       if (mounted) setState(() => _distanceUnit = unit);
+    });
+    _loadUsage();
+  }
+
+  Future<void> _loadUsage() async {
+    final ebird = await _usage.todayCount(ApiUsageTracker.providerEbird);
+    final xeno = await _usage.todayCount(ApiUsageTracker.providerXenoCanto);
+    if (!mounted) return;
+    setState(() {
+      _ebirdCallsToday = ebird;
+      _xenoCallsToday = xeno;
     });
   }
 
@@ -170,6 +185,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
               style: theme.textTheme.bodySmall,
             ),
           ],
+          const SizedBox(height: AppSpacing.xl),
+          Text('API usage today', style: theme.textTheme.titleSmall),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'eBird: $_ebirdCallsToday ${_ebirdCallsToday == 1 ? 'call' : 'calls'} today',
+            style: theme.textTheme.bodyMedium,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'Xeno-canto: $_xenoCallsToday ${_xenoCallsToday == 1 ? 'call' : 'calls'} today',
+            style: theme.textTheme.bodyMedium,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Counts reset at local midnight. Cache hits are not included — '
+            'only real network requests to each provider.',
+            style: theme.textTheme.bodySmall,
+          ),
           const SizedBox(height: AppSpacing.xl),
           Text('About', style: theme.textTheme.titleSmall),
           const SizedBox(height: AppSpacing.sm),

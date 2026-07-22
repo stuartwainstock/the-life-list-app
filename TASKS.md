@@ -14,6 +14,7 @@
 
 ## Done
 
+- [x] ~~API usage counter~~ (2026-07-22)
 - [x] ~~Species detail: reorder Songs & Calls below description~~ (2026-07-22)
 - [x] ~~Songs & calls (Xeno-canto)~~ (2026-07-22)
 - [x] ~~Extract shared AppBar component~~ (2026-07-22)

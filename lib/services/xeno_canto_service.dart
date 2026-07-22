@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../models/xeno_canto_recording.dart';
+import 'api_usage_tracker.dart';
 
 /// Thin client for Xeno-canto API v3 recordings.
 ///
@@ -90,7 +91,8 @@ class XenoCantoService {
     }
   }
 
-  Future<http.Response> _get(Uri uri) {
+  Future<http.Response> _get(Uri uri) async {
+    await ApiUsageTracker().recordCall(ApiUsageTracker.providerXenoCanto);
     final client = _httpClient;
     if (client != null) return client.get(uri);
     return http.get(uri);
