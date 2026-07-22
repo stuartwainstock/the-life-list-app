@@ -16,10 +16,15 @@ class SightingListRow extends StatelessWidget {
   final Observation observation;
   final VoidCallback? onTap;
 
+  /// When set, the loaded thumbnail participates in a shared-element [Hero]
+  /// flight into species detail (`docs/tickets/species-photo-hero-transition.md`).
+  final Object? photoHeroTag;
+
   const SightingListRow({
     super.key,
     required this.observation,
     this.onTap,
+    this.photoHeroTag,
   });
 
   @override
@@ -41,6 +46,7 @@ class SightingListRow extends StatelessWidget {
               key: ValueKey('thumb-${obs.speciesCode}'),
               comName: obs.comName,
               sciName: obs.sciName,
+              heroTag: photoHeroTag,
             ),
             const SizedBox(width: 12),
             Expanded(

@@ -25,6 +25,8 @@ import '../widgets/species_detail_skeleton.dart';
 /// Collapsing [SliverAppBar] with optional Commons gallery (swipe + dots)
 /// and attribution caption — see
 /// `docs/tickets/species-photo-attribution-and-gallery.md`.
+/// List → detail shared-element flight:
+/// `docs/tickets/species-photo-hero-transition.md`.
 ///
 /// ## Recent sightings
 /// Capped to [_SightingsSection.initialCap] with in-place "View all N"
@@ -35,6 +37,8 @@ import '../widgets/species_detail_skeleton.dart';
 /// ## Life list FAB
 /// Extended FAB clearance uses FAB height + margin + system bottom inset
 /// so the last sighting row can scroll clear of the button.
+/// Confirming "Add to life list" plays a brief on-brand celebration
+/// (`docs/tickets/life-list-celebration-animation.md`).
 class SpeciesDetailScreen extends StatefulWidget {
   final String apiKey;
   final String speciesCode;
@@ -42,6 +46,14 @@ class SpeciesDetailScreen extends StatefulWidget {
   final String sciName;
   final double lat;
   final double lng;
+
+  /// Shared-element tag matching the list [SpeciesThumbnail], when a real
+  /// photo was already on screen (`docs/tickets/species-photo-hero-transition.md`).
+  final Object? photoHeroTag;
+
+  /// Exact Wikipedia thumb URL the list was showing — Hero flies these bytes,
+  /// then the Commons gallery fades in underneath.
+  final String? heroThumbnailUrl;
 
   const SpeciesDetailScreen({
     super.key,
@@ -51,6 +63,8 @@ class SpeciesDetailScreen extends StatefulWidget {
     required this.sciName,
     required this.lat,
     required this.lng,
+    this.photoHeroTag,
+    this.heroThumbnailUrl,
   });
 
   @override
@@ -67,11 +81,20 @@ class _SpeciesDetailScreenState extends State<SpeciesDetailScreen> {
   WikiSummary? _summary;
   bool _isLogged = false;
 
+  /// Bumped only when the user confirms an add — drives the one-shot FAB
+  /// celebration without firing when we hydrate an already-logged species.
+  int _lifeListCelebration = 0;
+
   /// Extended FAB (~56) + default float margin (~16) + extra breathing room.
   /// Bottom inset is added at build time for home-indicator devices.
   static const double _fabClearanceBase = 96;
 
   bool get _hasPhoto => _summary?.photos.isNotEmpty ?? false;
+
+  bool get _hasIncomingHero =>
+      widget.photoHeroTag != null &&
+      widget.heroThumbnailUrl != null &&
+      widget.heroThumbnailUrl!.isNotEmpty;
 
   @override
   void initState() {
@@ -163,7 +186,10 @@ class _SpeciesDetailScreenState extends State<SpeciesDetailScreen> {
     ));
 
     if (!mounted) return;
-    setState(() => _isLogged = true);
+    setState(() {
+      _isLogged = true;
+      _lifeListCelebration++;
+    });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('${widget.comName} added to your life list')),
     );
@@ -171,10 +197,17 @@ class _SpeciesDetailScreenState extends State<SpeciesDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Photo chrome whenever we have a gallery *or* an incoming list Hero —
+    // the latter needs a destination Hero in the tree for the flight.
+    final usePhotoChrome = _loading
+        ? _hasIncomingHero
+        : (_hasPhoto || _hasIncomingHero);
+
     return Scaffold(
-      // Loading uses a skeleton hero with its own back control. Once loaded,
-      // photo → SliverAppBar; no photo → standard AppBar with serif title.
-      appBar: (_loading || _hasPhoto)
+      // Loading without a Hero uses the full skeleton (pulsing hero slab).
+      // With an incoming Hero, keep a real SliverAppBar so the shared
+      // element stays mounted through load → gallery fade-in.
+      appBar: usePhotoChrome
           ? null
           : AppBar(
               title: Text(
@@ -185,27 +218,42 @@ class _SpeciesDetailScreenState extends State<SpeciesDetailScreen> {
               ),
               toolbarHeight: AppTheme.toolbarHeightOf(context),
             ),
-      body: _loading
+      body: _loading && !_hasIncomingHero
           ? SpeciesDetailSkeleton(
               comName: widget.comName,
               sciName: widget.sciName,
             )
           : CustomScrollView(
+              physics: _loading
+                  ? const NeverScrollableScrollPhysics()
+                  : const AlwaysScrollableScrollPhysics(),
               slivers: [
-                if (_hasPhoto)
+                if (usePhotoChrome)
                   _HeroAppBar(
-                    photos: _summary!.photos,
+                    photos: _loading
+                        ? const []
+                        : (_summary?.photos ?? const []),
                     comName: widget.comName,
+                    photoHeroTag: widget.photoHeroTag,
+                    heroThumbnailUrl: widget.heroThumbnailUrl,
                   ),
-                SliverToBoxAdapter(child: _buildBody(context)),
+                SliverToBoxAdapter(
+                  child: _loading
+                      ? SpeciesDetailSkeleton.bodyBelowHero(
+                          context: context,
+                          comName: widget.comName,
+                          sciName: widget.sciName,
+                        )
+                      : _buildBody(context),
+                ),
               ],
             ),
       floatingActionButton: _loading
           ? null
-          : FloatingActionButton.extended(
-              onPressed: _isLogged ? null : _addToLifeList,
-              icon: Icon(_isLogged ? Icons.check : Icons.add),
-              label: Text(_isLogged ? 'On your life list' : 'Add to life list'),
+          : _LifeListFab(
+              isLogged: _isLogged,
+              celebrationToken: _lifeListCelebration,
+              onAdd: _addToLifeList,
             ),
     );
   }
@@ -274,37 +322,288 @@ class _SpeciesDetailScreenState extends State<SpeciesDetailScreen> {
   }
 }
 
+/// Milestone FAB — brief scale + icon/label crossfade when a species is logged.
+///
+/// Celebration is gated by [celebrationToken] (bumped only on explicit add),
+/// so hydrating an already-logged species stays instant. Reduced motion skips
+/// the bounce and switcher duration (`docs/tickets/life-list-celebration-animation.md`).
+class _LifeListFab extends StatefulWidget {
+  final bool isLogged;
+  final int celebrationToken;
+  final VoidCallback onAdd;
+
+  const _LifeListFab({
+    required this.isLogged,
+    required this.celebrationToken,
+    required this.onAdd,
+  });
+
+  @override
+  State<_LifeListFab> createState() => _LifeListFabState();
+}
+
+class _LifeListFabState extends State<_LifeListFab>
+    with SingleTickerProviderStateMixin {
+  static const _switchDuration = Duration(milliseconds: 280);
+  static const _bounceDuration = Duration(milliseconds: 420);
+
+  late final AnimationController _bounce;
+  late final Animation<double> _scale;
+  late final Animation<double> _ringOpacity;
+  late final Animation<double> _ringScale;
+
+  /// True only for the explicit-add celebration frame(s).
+  bool _celebrating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _bounce = AnimationController(vsync: this, duration: _bounceDuration);
+    _scale = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(begin: 1.0, end: 1.08)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 40,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.08, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 60,
+      ),
+    ]).animate(_bounce);
+    _ringOpacity = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(begin: 0.0, end: 0.55)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 30,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 0.55, end: 0.0)
+            .chain(CurveTween(curve: Curves.easeIn)),
+        weight: 70,
+      ),
+    ]).animate(_bounce);
+    _ringScale = Tween<double>(begin: 1.0, end: 1.22)
+        .chain(CurveTween(curve: Curves.easeOut))
+        .animate(_bounce);
+  }
+
+  @override
+  void didUpdateWidget(covariant _LifeListFab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.celebrationToken <= oldWidget.celebrationToken) return;
+
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    if (reduceMotion) {
+      _celebrating = false;
+      return;
+    }
+
+    _celebrating = true;
+    _bounce.forward(from: 0).whenComplete(() {
+      if (!mounted) return;
+      setState(() => _celebrating = false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _bounce.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final switchDuration =
+        (_celebrating && !reduceMotion) ? _switchDuration : Duration.zero;
+
+    final fab = FloatingActionButton.extended(
+      onPressed: widget.isLogged ? null : widget.onAdd,
+      icon: AnimatedSwitcher(
+        duration: switchDuration,
+        switchInCurve: Curves.easeOut,
+        switchOutCurve: Curves.easeIn,
+        transitionBuilder: (child, animation) => ScaleTransition(
+          scale: animation,
+          child: FadeTransition(opacity: animation, child: child),
+        ),
+        child: Icon(
+          widget.isLogged ? Icons.check : Icons.add,
+          key: ValueKey<bool>(widget.isLogged),
+        ),
+      ),
+      label: AnimatedSwitcher(
+        duration: switchDuration,
+        switchInCurve: Curves.easeOut,
+        switchOutCurve: Curves.easeIn,
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: child,
+        ),
+        child: Text(
+          widget.isLogged ? 'On your life list' : 'Add to life list',
+          key: ValueKey<bool>(widget.isLogged),
+        ),
+      ),
+    );
+
+    if (reduceMotion) return fab;
+
+    return AnimatedBuilder(
+      animation: _bounce,
+      builder: (context, child) {
+        return Stack(
+          alignment: Alignment.center,
+          clipBehavior: Clip.none,
+          children: [
+            // Soft brand-accent ring — one pulse, then gone.
+            if (_bounce.isAnimating || _bounce.value > 0)
+              IgnorePointer(
+                child: Opacity(
+                  opacity: _ringOpacity.value,
+                  child: Transform.scale(
+                    scale: _ringScale.value,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(AppRadius.lg),
+                        border: Border.all(
+                          color: scheme.primary,
+                          width: 2,
+                        ),
+                      ),
+                      child: const SizedBox(width: 200, height: 56),
+                    ),
+                  ),
+                ),
+              ),
+            Transform.scale(
+              scale: _scale.value,
+              child: child,
+            ),
+          ],
+        );
+      },
+      child: fab,
+    );
+  }
+}
+
 class _HeroAppBar extends StatefulWidget {
   final List<SpeciesPhoto> photos;
   final String comName;
+  final Object? photoHeroTag;
+  final String? heroThumbnailUrl;
 
   const _HeroAppBar({
     required this.photos,
     required this.comName,
+    this.photoHeroTag,
+    this.heroThumbnailUrl,
   });
 
   @override
   State<_HeroAppBar> createState() => _HeroAppBarState();
 }
 
-class _HeroAppBarState extends State<_HeroAppBar> {
+class _HeroAppBarState extends State<_HeroAppBar>
+    with SingleTickerProviderStateMixin {
   late final PageController _pageController = PageController();
   int _index = 0;
 
+  /// List thumb overlay (same bytes as the flight) until the gallery fades in.
+  bool _showThumbOverlay = false;
+  late final AnimationController _overlayFade;
+  late final Animation<double> _overlayOpacity;
+
+  bool get _hasIncomingHero =>
+      widget.photoHeroTag != null &&
+      widget.heroThumbnailUrl != null &&
+      widget.heroThumbnailUrl!.isNotEmpty;
+
+  @override
+  void initState() {
+    super.initState();
+    _showThumbOverlay = _hasIncomingHero;
+    _overlayFade = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 280),
+    );
+    _overlayOpacity = CurvedAnimation(
+      parent: _overlayFade,
+      curve: Curves.easeOut,
+    );
+    if (_showThumbOverlay && widget.photos.isNotEmpty) {
+      _scheduleOverlayFade();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _HeroAppBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_showThumbOverlay &&
+        oldWidget.photos.isEmpty &&
+        widget.photos.isNotEmpty) {
+      _scheduleOverlayFade();
+    }
+  }
+
+  void _scheduleOverlayFade() {
+    // Let the first gallery frame paint under the thumb, then crossfade.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_showThumbOverlay) return;
+      if (MediaQuery.disableAnimationsOf(context)) {
+        setState(() => _showThumbOverlay = false);
+        return;
+      }
+      _overlayFade.forward().whenComplete(() {
+        if (!mounted) return;
+        setState(() => _showThumbOverlay = false);
+      });
+    });
+  }
+
   @override
   void dispose() {
+    _overlayFade.dispose();
     _pageController.dispose();
     super.dispose();
   }
 
-  SpeciesPhoto get _current => widget.photos[_index.clamp(0, widget.photos.length - 1)];
+  SpeciesPhoto? get _current {
+    if (widget.photos.isEmpty) return null;
+    return widget.photos[_index.clamp(0, widget.photos.length - 1)];
+  }
 
   Future<void> _openSource() async {
-    final raw = _current.sourcePageUrl;
+    final raw = _current?.sourcePageUrl;
     if (raw == null || raw.isEmpty) return;
     final uri = Uri.tryParse(raw);
     if (uri == null) return;
     await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Widget _thumbImage({required bool forHero}) {
+    final image = CachedNetworkImage(
+      imageUrl: widget.heroThumbnailUrl!,
+      httpHeaders: WikipediaService.imageRequestHeaders,
+      cacheManager: SpeciesImageCache.instance,
+      fit: BoxFit.cover,
+      alignment: Alignment.center,
+      width: double.infinity,
+      height: double.infinity,
+      placeholder: (_, __) => const ColoredBox(color: Colors.transparent),
+      errorWidget: (_, __, ___) => const ColoredBox(color: Colors.transparent),
+    );
+    if (!forHero) return image;
+    return Hero(
+      tag: widget.photoHeroTag!,
+      child: Material(
+        type: MaterialType.transparency,
+        child: image,
+      ),
+    );
   }
 
   @override
@@ -313,7 +612,8 @@ class _HeroAppBarState extends State<_HeroAppBar> {
     final theme = Theme.of(context);
     final photos = widget.photos;
     final multi = photos.length > 1;
-    final attribution = _current.attributionText;
+    final attribution = _current?.attributionText;
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
 
     return SliverAppBar(
       pinned: true,
@@ -329,34 +629,52 @@ class _HeroAppBarState extends State<_HeroAppBar> {
           fit: StackFit.expand,
           children: [
             ColoredBox(color: scheme.surfaceContainerHighest),
-            PageView.builder(
-              controller: _pageController,
-              itemCount: photos.length,
-              onPageChanged: (i) => setState(() => _index = i),
-              itemBuilder: (context, i) {
-                return Semantics(
-                  image: true,
-                  label: 'Photo of a ${widget.comName}',
-                  child: CachedNetworkImage(
-                    imageUrl: photos[i].imageUrl,
-                    httpHeaders: WikipediaService.imageRequestHeaders,
-                    cacheManager: SpeciesImageCache.instance,
-                    fit: BoxFit.cover,
-                    alignment: Alignment.center,
-                    placeholder: (_, __) => const Center(
-                      child: BrandProgressIndicator(),
-                    ),
-                    errorWidget: (_, __, ___) => Center(
-                      child: Icon(
-                        Icons.image_not_supported_outlined,
-                        size: 48,
-                        color: scheme.outline,
+            if (photos.isNotEmpty)
+              PageView.builder(
+                controller: _pageController,
+                itemCount: photos.length,
+                onPageChanged: (i) => setState(() => _index = i),
+                itemBuilder: (context, i) {
+                  return Semantics(
+                    image: true,
+                    label: 'Photo of a ${widget.comName}',
+                    child: CachedNetworkImage(
+                      imageUrl: photos[i].imageUrl,
+                      httpHeaders: WikipediaService.imageRequestHeaders,
+                      cacheManager: SpeciesImageCache.instance,
+                      fit: BoxFit.cover,
+                      alignment: Alignment.center,
+                      placeholder: (_, __) => const Center(
+                        child: BrandProgressIndicator(),
+                      ),
+                      errorWidget: (_, __, ___) => Center(
+                        child: Icon(
+                          Icons.image_not_supported_outlined,
+                          size: 48,
+                          color: scheme.outline,
+                        ),
                       ),
                     ),
-                  ),
-                );
-              },
-            ),
+                  );
+                },
+              )
+            else if (_hasIncomingHero && !_showThumbOverlay)
+              // Gallery empty but we still have the list thumb — keep it.
+              _thumbImage(forHero: false),
+            // Same bytes the list showed — Hero flies this, then fades out
+            // once the Commons gallery is underneath.
+            if (_showThumbOverlay)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: reduceMotion
+                      ? _thumbImage(forHero: true)
+                      : FadeTransition(
+                          opacity: Tween<double>(begin: 1, end: 0)
+                              .animate(_overlayOpacity),
+                          child: _thumbImage(forHero: true),
+                        ),
+                ),
+              ),
             // Must IgnorePointer — a full-bleed DecoratedBox above the
             // PageView otherwise steals horizontal swipes.
             const IgnorePointer(
@@ -382,7 +700,7 @@ class _HeroAppBarState extends State<_HeroAppBar> {
                 right: AppSpacing.lg,
                 bottom: multi ? 28 : AppSpacing.md,
                 child: GestureDetector(
-                  onTap: _current.sourcePageUrl != null ? _openSource : null,
+                  onTap: _current?.sourcePageUrl != null ? _openSource : null,
                   child: Text(
                     attribution,
                     maxLines: 2,

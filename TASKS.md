@@ -15,6 +15,8 @@
 
 ## Done
 
+- [x] ~~Life List celebration animation~~ (2026-07-22)
+- [x] ~~Species photo hero transition~~ (2026-07-22)
 - [x] ~~Hotspot sheet polish~~ (2026-07-22)
 - [x] ~~Hotspots map: AppBar parity with sightings~~ (2026-07-22)
 - [x] ~~Settings: units toggle + About skeleton~~ (2026-07-22)

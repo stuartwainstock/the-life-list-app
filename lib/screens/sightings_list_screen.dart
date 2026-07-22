@@ -12,6 +12,8 @@ import '../theme/app_theme.dart';
 import '../utils/relative_time.dart';
 import '../widgets/sighting_list_row.dart';
 import '../widgets/skeleton_sighting_row.dart';
+import '../widgets/species_thumbnail.dart';
+import '../services/wikipedia_service.dart';
 import 'species_detail_screen.dart';
 import 'species_search_screen.dart';
 
@@ -430,6 +432,15 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
     final lat = _lat ?? _position?.latitude;
     final lng = _lng ?? _position?.longitude;
     if (lat == null || lng == null) return;
+
+    // Only fly a Hero when the list already resolved a real photo — never
+    // animate a placeholder into the detail hero.
+    final thumbUrl = WikipediaService.peekCachedThumbnailUrl(
+      comName: obs.comName,
+      sciName: obs.sciName,
+    );
+    final heroTag = thumbUrl == null ? null : speciesPhotoHeroTag(obs);
+
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => SpeciesDetailScreen(
         apiKey: widget.apiKey,
@@ -438,6 +449,8 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
         sciName: obs.sciName,
         lat: lat,
         lng: lng,
+        photoHeroTag: heroTag,
+        heroThumbnailUrl: thumbUrl,
       ),
     ));
   }
@@ -571,6 +584,7 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
               // thumbnail State (ListView recycling bug we hit early on).
               key: ValueKey('${obs.speciesCode}-${obs.locId}-${obs.obsDt}'),
               observation: obs,
+              photoHeroTag: speciesPhotoHeroTag(obs),
               onTap: () => _openDetail(obs),
             );
           },
@@ -604,6 +618,7 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
                             '${obs.speciesCode}-${obs.locId}-${obs.obsDt}',
                           ),
                           observation: obs,
+                          photoHeroTag: speciesPhotoHeroTag(obs),
                           onTap: () => _openDetail(obs),
                         ),
                         if (i < group.items.length - 1)

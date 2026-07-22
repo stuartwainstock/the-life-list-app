@@ -1,7 +1,16 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import '../models/observation.dart';
 import '../services/species_image_cache.dart';
 import '../services/wikipedia_service.dart';
+
+/// Stable [Hero] tag for a sighting-row photo → detail flight.
+///
+/// Includes loc + time so the same species twice in one list doesn't collide
+/// (`docs/tickets/species-photo-hero-transition.md`).
+String speciesPhotoHeroTag(Observation observation) =>
+    'species-photo-${observation.speciesCode}-'
+    '${observation.locId}-${observation.obsDt.millisecondsSinceEpoch}';
 
 /// Lazy-loaded Wikipedia thumbnail for a species.
 ///
@@ -17,16 +26,25 @@ import '../services/wikipedia_service.dart';
 /// different species into the same index, an unkeyed thumbnail kept showing
 /// the previous bird. Always pass a species-based [Key] from the parent
 /// (and we also refresh in [didUpdateWidget] as belt-and-suspenders).
+///
+/// ## Hero
+/// Optional [heroTag] wraps the loaded image only — never the placeholder —
+/// so a list tap can expand into the detail hero. See
+/// `docs/tickets/species-photo-hero-transition.md`.
 class SpeciesThumbnail extends StatefulWidget {
   final String comName;
   final String sciName;
   final double size;
+
+  /// When non-null and the image loads, wraps the photo in a [Hero].
+  final Object? heroTag;
 
   const SpeciesThumbnail({
     super.key,
     required this.comName,
     required this.sciName,
     this.size = 56,
+    this.heroTag,
   });
 
   @override
@@ -81,20 +99,39 @@ class _SpeciesThumbnailState extends State<SpeciesThumbnail> {
           return Semantics(
             image: true,
             label: 'Photo of a ${widget.comName}',
-            child: ClipRRect(
-              borderRadius: radius,
-              child: CachedNetworkImage(
-                imageUrl: url,
-                httpHeaders: WikipediaService.imageRequestHeaders,
-                cacheManager: SpeciesImageCache.instance,
-                width: size,
-                height: size,
-                fit: BoxFit.cover,
-                placeholder: (_, __) =>
-                    _Placeholder(size: size, radius: radius, loading: true),
-                errorWidget: (_, __, ___) =>
-                    _Placeholder(size: size, radius: radius, loading: false),
-              ),
+            child: CachedNetworkImage(
+              imageUrl: url,
+              httpHeaders: WikipediaService.imageRequestHeaders,
+              cacheManager: SpeciesImageCache.instance,
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              // Hero only around the decoded bitmap — never the loading /
+              // error placeholder icons.
+              imageBuilder: (context, imageProvider) {
+                final image = ClipRRect(
+                  borderRadius: radius,
+                  child: Image(
+                    image: imageProvider,
+                    width: size,
+                    height: size,
+                    fit: BoxFit.cover,
+                  ),
+                );
+                final tag = widget.heroTag;
+                if (tag == null) return image;
+                return Hero(
+                  tag: tag,
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: image,
+                  ),
+                );
+              },
+              placeholder: (_, __) =>
+                  _Placeholder(size: size, radius: radius, loading: true),
+              errorWidget: (_, __, ___) =>
+                  _Placeholder(size: size, radius: radius, loading: false),
             ),
           );
         },

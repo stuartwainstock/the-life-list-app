@@ -76,6 +76,16 @@ class WikipediaService {
     });
   }
 
+  /// Sync peek at a thumbnail already resolved this session — used to decide
+  /// whether a list→detail [Hero] can fly the same bytes the user just saw
+  /// (`docs/tickets/species-photo-hero-transition.md`).
+  static String? peekCachedThumbnailUrl({
+    required String comName,
+    required String sciName,
+  }) {
+    return _thumbCache[_cacheKey(comName: comName, sciName: sciName)];
+  }
+
   /// Thumbnail URL only — Wikipedia lead image (lightweight, no attribution).
   Future<String?> fetchThumbnailUrl({
     required String comName,
