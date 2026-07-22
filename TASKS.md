@@ -2,6 +2,8 @@
 
 ## Active
 
+- [ ] **Extract shared AppBar component** - one shared widget builds all four top-level screens' app bars instead of each hand-rolling its own, so future action/icon drift can't happen silently — see `docs/tickets/shared-appbar-component.md`
+
 ## Waiting On
 
 ## Someday
@@ -13,6 +15,8 @@
 
 ## Done
 
+- [x] ~~Hotspots map: AppBar parity with sightings~~ (2026-07-22)
+- [x] ~~Settings: units toggle + About skeleton~~ (2026-07-22)
 - [x] ~~Hotspot checklist: scope to shared date range~~ (2026-07-22)
 - [x] ~~Sightings filter: date-range slider~~ (2026-07-22)
 - [x] ~~Hotspot map: marker clustering~~ (2026-07-21)

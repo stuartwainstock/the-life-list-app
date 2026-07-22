@@ -2,23 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/hotspot.dart';
 import '../services/ebird_list_cache.dart';
 import '../services/ebird_service.dart';
 import '../services/location_service.dart';
+import '../services/settings_service.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_theme.dart';
 import '../utils/relative_time.dart';
 import '../widgets/hotspot_detail_sheet.dart';
 import '../widgets/skeleton.dart';
+import 'species_search_screen.dart';
 
 /// Map of nearby eBird hotspots, using OpenStreetMap tiles via flutter_map
 /// so no Google Maps API key / billing setup is required.
 ///
 /// Hotspots use the same stale-while-revalidate disk cache as sightings
-/// (`docs/tickets/offline-caching.md`). Default search radius matches
-/// [EbirdService.nearbyHotspots] (25 km) — sightings radius toggle is
-/// intentionally separate.
+/// (`docs/tickets/offline-caching.md`). Search radius is user-adjustable and
+/// persisted separately from the sightings radius
+/// (`docs/tickets/hotspots-appbar-parity.md`).
 ///
 /// Marker detail uses a persistent peek sheet ([HotspotDetailSheet]) inside
 /// this screen's body — never `showModalBottomSheet`, so it stays above the
@@ -35,12 +38,14 @@ class HotspotsMapScreen extends StatefulWidget {
 class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
   final _locationService = LocationService();
   final _listCache = EbirdListCache();
+  final _settings = SettingsService();
   late final EbirdService _ebird = EbirdService(widget.apiKey);
   final _mapController = MapController();
 
-  /// Matches [EbirdService.nearbyHotspots] default.
-  static const _distKm = 25;
   static const _defaultZoom = 11.0;
+
+  int _distKm = SettingsService.defaultHotspotsRadiusKm;
+  DistanceUnit _distanceUnit = DistanceUnit.kilometers;
 
   bool _loading = true;
   String? _error;
@@ -53,7 +58,7 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    _init();
   }
 
   @override
@@ -62,10 +67,110 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
     super.dispose();
   }
 
+  Future<void> _init() async {
+    final radius = await _settings.getHotspotsRadiusKm();
+    if (!mounted) return;
+    setState(() => _distKm = radius);
+    await _load();
+  }
+
   void _recenter() {
     final center = _center;
     if (center == null) return;
     _mapController.move(center, _defaultZoom);
+  }
+
+  void _openSearch() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SpeciesSearchScreen(
+          apiKey: widget.apiKey,
+          lat: _center?.latitude,
+          lng: _center?.longitude,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openRadiusSheet() async {
+    final unit = await _settings.getDistanceUnit();
+    if (!mounted) return;
+    setState(() => _distanceUnit = unit);
+
+    if (!mounted) return;
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        final theme = Theme.of(sheetContext);
+        final scheme = theme.colorScheme;
+        final sliderTheme = SliderTheme.of(sheetContext).copyWith(
+          activeTrackColor: scheme.primary,
+          thumbColor: scheme.primary,
+          overlayColor: scheme.primary.withValues(alpha: 0.12),
+          inactiveTrackColor: scheme.primary.withValues(alpha: 0.24),
+          valueIndicatorColor: scheme.primary,
+        );
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.xl,
+              AppSpacing.sm,
+              AppSpacing.xl,
+              AppSpacing.xl,
+            ),
+            child: StatefulBuilder(
+              builder: (context, setSheetState) {
+                final radiusLabel = _distanceUnit.formatRadiusKm(_distKm);
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Search within $radiusLabel',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: scheme.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    SliderTheme(
+                      data: sliderTheme,
+                      child: Slider(
+                        value: _distKm.toDouble(),
+                        min: SettingsService.minHotspotsRadiusKm.toDouble(),
+                        max: SettingsService.maxHotspotsRadiusKm.toDouble(),
+                        divisions: SettingsService.maxHotspotsRadiusKm -
+                            SettingsService.minHotspotsRadiusKm,
+                        label: radiusLabel,
+                        onChanged: (value) {
+                          final km = value.round();
+                          setSheetState(() {});
+                          setState(() => _distKm = km);
+                        },
+                        onChangeEnd: (value) async {
+                          final km = value.round();
+                          await _settings.setHotspotsRadiusKm(km);
+                          if (!mounted) return;
+                          _load();
+                        },
+                      ),
+                    ),
+                    Text(
+                      _distanceUnit.radiusRangeHint(
+                        minKm: SettingsService.minHotspotsRadiusKm,
+                        maxKm: SettingsService.maxHotspotsRadiusKm,
+                      ),
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _onHotspotMarkerTap(Marker marker) {
@@ -115,15 +220,25 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
       _showingStale = false;
     });
 
-    // Paint last hotspots immediately (map center from cached lat/lng).
+    // Instant paint from last success when radius still matches.
     final last = await _listCache.readLastHotspots();
     if (!mounted) return;
-    if (last != null) {
+    if (last != null && last.distKm == _distKm) {
       setState(() {
         _center = LatLng(last.lat, last.lng);
         _hotspots = last.items;
         _cacheFetchedAt = last.fetchedAt;
         _loading = false;
+      });
+    } else if (_hotspots.isNotEmpty) {
+      setState(() {
+        _hotspots = [];
+        _loading = true;
+        _showingStale = false;
+        _cacheFetchedAt = null;
+        if (last != null) {
+          _center = LatLng(last.lat, last.lng);
+        }
       });
     }
 
@@ -206,6 +321,16 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
         title: const Text('Nearby Hotspots'),
         toolbarHeight: AppTheme.toolbarHeightOf(context),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            tooltip: 'Search species',
+            onPressed: _openSearch,
+          ),
+          IconButton(
+            icon: const Icon(Icons.tune),
+            tooltip: 'Search radius',
+            onPressed: _openRadiusSheet,
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh hotspots',
@@ -321,6 +446,15 @@ class _HotspotsMapScreenState extends State<HotspotsMapScreen> {
                     ),
                   );
                 },
+              ),
+            ),
+            // OSM tile usage policy requires visible attribution.
+            SimpleAttributionWidget(
+              source: const Text('OpenStreetMap contributors'),
+              alignment: Alignment.bottomLeft,
+              onTap: () => launchUrl(
+                Uri.parse('https://www.openstreetmap.org/copyright'),
+                mode: LaunchMode.externalApplication,
               ),
             ),
           ],

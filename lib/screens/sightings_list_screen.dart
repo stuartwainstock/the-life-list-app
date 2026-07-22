@@ -84,6 +84,7 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
   bool _showNotableOnly = false;
   int _distKm = SettingsService.defaultSightingsRadiusKm;
   int _backDays = SettingsService.defaultSightingsBackDays;
+  DistanceUnit _distanceUnit = DistanceUnit.kilometers;
 
   /// Null while taxonomy is loading/unavailable — triggers flat-list fallback.
   Map<String, TaxonomyEntry>? _taxonomyLookup;
@@ -100,11 +101,13 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
     final results = await Future.wait([
       _settings.getSightingsRadiusKm(),
       _settings.getSightingsBackDays(),
+      _settings.getDistanceUnit(),
     ]);
     if (!mounted) return;
     setState(() {
-      _distKm = results[0];
-      _backDays = results[1];
+      _distKm = results[0] as int;
+      _backDays = results[1] as int;
+      _distanceUnit = results[2] as DistanceUnit;
     });
     await Future.wait([_load(), _loadTaxonomy()]);
   }
@@ -285,7 +288,13 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
     }
   }
 
-  void _openFiltersSheet() {
+  Future<void> _openFiltersSheet() async {
+    // Refresh unit preference in case it changed in Settings.
+    final unit = await _settings.getDistanceUnit();
+    if (!mounted) return;
+    setState(() => _distanceUnit = unit);
+
+    if (!mounted) return;
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -309,12 +318,13 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
             ),
             child: StatefulBuilder(
               builder: (context, setSheetState) {
+                final radiusLabel = _distanceUnit.formatRadiusKm(_distKm);
                 return Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'Search within $_distKm km',
+                      'Search within $radiusLabel',
                       style: theme.textTheme.titleSmall?.copyWith(
                         color: scheme.primary,
                         fontWeight: FontWeight.w700,
@@ -329,7 +339,7 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
                         max: SettingsService.maxSightingsRadiusKm.toDouble(),
                         divisions: SettingsService.maxSightingsRadiusKm -
                             SettingsService.minSightingsRadiusKm,
-                        label: '$_distKm km',
+                        label: radiusLabel,
                         onChanged: (value) {
                           final km = value.round();
                           setSheetState(() {});
@@ -344,7 +354,10 @@ class _SightingsListScreenState extends State<SightingsListScreen> {
                       ),
                     ),
                     Text(
-                      '1–${SettingsService.maxSightingsRadiusKm} km',
+                      _distanceUnit.radiusRangeHint(
+                        minKm: SettingsService.minSightingsRadiusKm,
+                        maxKm: SettingsService.maxSightingsRadiusKm,
+                      ),
                       style: theme.textTheme.bodySmall,
                     ),
                     const SizedBox(height: AppSpacing.xl),
